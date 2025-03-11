@@ -9,7 +9,7 @@ from scipy.optimize import curve_fit
 data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
 
 timestep = 0.125  # time step of intensity trace in seconds
-p0 = [1 / 20, 1 / 3, 1 / 1.97, 1 / 6.92, 1 / 0.3, 1 / 2.61, 1/1, 1/5, 0.7, 0.3, 0.005, 0.004, 0]
+p0 = [1 / 2, 1 / 3, 1 / 1.97, 1 / 6.92, 1 / 3, 1 / 2.61, 1/1, 1/7, 0.3, 0.005, 0.004, 0]
 
 dataset_150 = h5py.File(os.path.join(data_dir, '6 March 2025', '150 uW.h5'), 'r')
 dataset = h5py.File(os.path.join(data_dir, '6 March 2025', '225 uW.h5'), 'r')
@@ -21,20 +21,18 @@ dataset_1700 = h5py.File(os.path.join(data_dir, '7 March 2025', '1700 uW.h5'), '
 
 
 def kinetic(t, y, k1, k2, k3, k4, k5, k6, k7, k8):
-    K = np.array([[0,  k7,  0,  k6,    0, 0],  # Bleached
-                  [0, -k3-k7, 0,  0,     0,  k8],  # Quenced 1
-                  [0,  0, -k2, 0,     0,  k1],  # Quenced 2
-                  [0,  0,  0, -k5-k6, 0,  k4],  # Quenched 3
-                  [0,  0,  0,  0,     0, 0],  # Unquenced 1
-                  [0,  k3, k2, k5,    0, -k1-k4-k8]])  # Unquenched 2
+    K = np.array([[-k5,  k3,  k8,  k4],  # Bleached
+                  [0, -k2-k3, 0, k1],  # Quenced
+                  [0, 0, -k7-k8, k6],  # Quenched 2
+                  [k5,  k2, k7, -k1-k4-k6]])  # Unquenched
     return K @ y
 
 
 def modelfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, t_dark):
-    sol1 = solve_ivp(kinetic, [t[0], t[t_dark]], [0, 0, 0, 0, q0, y0], t_eval=t[0:t_dark],
-                     args=[k1, k2, k3, k4, k5, k6, k7, k8])
+    sol1 = solve_ivp(kinetic, [t[0], t[t_dark]], [0, 0, q0, y0], t_eval=t[0:t_dark],
+                     args=[k1, 0, k3, 0, k4, 0, 0, 0])
     sol2 = solve_ivp(kinetic, [t[t_dark], t[-1]], sol1.y[:, -1], t_eval=t[t_dark:-1],
-                     args=[0, k2, 0, 0, k5, k6, 0, k8])
+                     args=[k1, k2, 0, 0, k5, 0, 0, 0])
     return sol1, sol2
 
 
@@ -55,8 +53,8 @@ def onetrace(dataset, partnum):
     norm_pulsephotons = pulsephotons / ms_pulse[1:]
     # print(ms_pulse)
     # print(pulsephotons[0])
-    norm_pulsephotons /= np.mean(norm_pulsephotons[:6])
-    return norm_pulsephotons[1:]
+    norm_pulsephotons /= np.mean(norm_pulsephotons[7])
+    return norm_pulsephotons[:]
 
 
 def avtrace(dataset, partnums):
@@ -68,22 +66,21 @@ def avtrace(dataset, partnums):
 
 def fittrace(dataset, partnums):
 
-    norm_pulsephotons = avtrace(dataset, partnums)[6:]
+    norm_pulsephotons = avtrace(dataset, partnums)[7:]
     datapoints = len(norm_pulsephotons) + 1
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
 
     t_dark = np.argmin(norm_pulsephotons)
 
-    def fitfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, br1, br2, t_dark_offset):
-        sol1, sol2 = modelfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, 0, t_dark+int(t_dark_offset*1e10))
-        return np.concatenate((0*sol1.y[1]+0*np.ones(len(sol1.y[2]))+sol1.y[5]+sol1.y[4],
-                               0*sol2.y[1]+0*np.ones(len(sol2.y[2]))+sol2.y[5]+sol2.y[4]))
+    def fitfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, br2, t_dark_offset):
+        sol1, sol2 = modelfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, t_dark)#+int(t_dark_offset*1e10))
+        return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2]+sol2.y[3]))
 
-    # def objective(params):
-    #     k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, br1, br2, t_dark_offset = params
-    #     model = fitfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, 0, 0.5, 1e7)
-    #     return np.sum((model - norm_pulsephotons) ** 2)
+    def objective(params):
+        k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, q1, br2, t_dark_offset = params
+        model = fitfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, q1, 0.5, 1e7)
+        return np.sum((model - norm_pulsephotons) ** 2)
 
     bounds = [(0, 10), (0, 10), (0, 10), (0, 10), (0, 10), (0, 10), (0, 10), (0, 10), (0, 1),
               (0, 1), (0, 1), (0, 1), (-1e-10, 1e-10)]
@@ -91,8 +88,8 @@ def fittrace(dataset, partnums):
     # popt = result.x
 
     popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0,
-                                   bounds=([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1e-10],
-                                   [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf,
+                                   bounds=([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1e-10],
+                                   [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf,
                                     np.inf, np.inf, 1e-10]), verbose=2)
 
     # popt = [1/10, 1/1.58, 1/2.05, 1/28.77, 1/0.2, 1/1.68, 1/0.52, 1/4, 0.8, 0.2, 0.2, 0.03, 0]
@@ -119,14 +116,14 @@ def fittrace(dataset, partnums):
     print(f'Y0 = {y0:.2f} cps')
     print(f'Q0 = {q0:.2f} cps')
     print(popt[10], popt[11])
-    print(popt[12])
+    # print(popt[12])
 
-    # t_plot = t
-    t_plot = np.linspace(0, endpoint, datapoints*10)
-    t_dark = 10*t_dark
+    t_plot = t
+    # t_plot = np.linspace(0, endpoint, datapoints*10)
+    # t_dark = 10*t_dark
     model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7], popt[8], popt[9],
-                    popt[10], popt[11], popt[12])
-    norm_pulsephotons = np.interp(t_plot, t[:-1], norm_pulsephotons)[:-1]
+                    popt[10], popt[11])
+    # norm_pulsephotons = np.interp(t_plot, t[:-1], norm_pulsephotons)[:-1]
 
     return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau3, tau4, tau5, tau6, tau7, y0, q0
 
@@ -139,7 +136,7 @@ def fittrace(dataset, partnums):
 # plt.plot(norm_pulsephotons_225[:], '--')
 # plt.plot(model_225[:], label='225 uW', color='C1')
 #
-# norm_pulsephotons_338, model_338, *stuff = fittrace(dataset_338, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+# norm_pulsephotons_338, model_338, *stuff = fittrace(dataset_338, [1, 2])#, 3, 4, 5, 6, 7, 8, 9, 10])
 # plt.plot(norm_pulsephotons_338[:], '--')
 # plt.plot(model_338[:], label='338 uW', color='C2')
 #
@@ -152,14 +149,15 @@ def fittrace(dataset, partnums):
 # plt.plot(norm_pulsephotons_760[:], '--')
 # plt.plot(model_760[:], label='760 uW', color='C4')
 #
-norm_pulsephotons_1140, model_1140, *stuff = fittrace(dataset_1140, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])#, 11, 12, 13, 14, 15])
-plt.plot(norm_pulsephotons_1140[:], '--')
-plt.plot(model_1140[:], label='1140 uW', color='C5')
+# norm_pulsephotons_1140, model_1140, *stuff = fittrace(dataset_1140, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])#, 11, 12, 13, 14, 15])
+# plt.plot(norm_pulsephotons_1140[:], '--')
+# plt.plot(model_1140[:], label='1140 uW', color='C5')
 #
-# norm_pulsephotons_1700, model_1700, t_1700, *params_1700 = fittrace(dataset_1700, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])#, 11, 12, 13, 14, 15])
-# plt.plot(t_1700, norm_pulsephotons_1700[:], '--')
-# plt.plot(t_1700, model_1700[:], label='1700 uW', color='C6')
-# plt.plot(norm_pulsephotons_1700[:]-model_1700[:])
+fig, (ax1, ax2) = plt.subplots(2, 1, height_ratios=(2, 1))
+norm_pulsephotons_1700, model_1700, t_1700, *params_1700 = fittrace(dataset_1700, [1])#, 2, 3, 4, 5, 6, 7, 8, 9, 10])#, 11, 12, 13, 14, 15])
+ax1.plot(t_1700, norm_pulsephotons_1700[:], '--')
+ax1.plot(t_1700, model_1700[:], label='1700 uW', color='C6')
+ax2.plot(norm_pulsephotons_1700[:]-model_1700[:], '.')
 
 plt.grid()
 plt.xlabel('Pulse time (125 ms)')
