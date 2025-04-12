@@ -19,9 +19,11 @@ data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
 # dataset = h5py.File('blinking/4 Feb 2025/2380 mE.h5', 'r')
 
 # dataset_150 = h5py.File(os.path.join(data_dir, '6 March 2025', '150 uW.h5'), 'r')
-dataset_150 = h5py.File(os.path.join(data_dir, '13 March 2025', '1700 uW.h5'), 'r')
+# dataset = h5py.File(os.path.join(data_dir, '10 April 2025\Power study new', '3550.h5'), 'r')
 # dataset = h5py.File(os.path.join(data_dir, '6 March 2025', '225 uW.h5'), 'r')
-dataset = h5py.File(os.path.join(data_dir, '13 March 2025', 'GCO.h5'), 'r')
+# dataset = h5py.File(os.path.join(data_dir, '13 March 2025', 'GCO.h5'), 'r')
+# dataset = h5py.File(os.path.join(data_dir, '12 April 2025', '3000uW.h5'), 'r')
+dataset = h5py.File(os.path.join(data_dir, '12 April 2025', '2500uW new.h5'), 'r')
 
 
 def onetrace(dataset, partnum):
@@ -57,9 +59,9 @@ def avtrace(dataset, partnums):
 # norm_pulsephotons = avtrace(dataset, [27, 28, 29, 30, 31])
 # norm_pulsephotons = avtrace(dataset, [31, 32, 33, 34, 35])
 # norm_pulsephotons = avtrace(dataset, [38, 39, 40, 41, 42, 43, 44, 45, 46, 47])
-norm_pulsephotons_150 = avtrace(dataset_150, [2])#], 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
-norm_pulsephotons = avtrace(dataset, [6])#, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
-# norm_pulsephotons = avtrace(dataset, [11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+norm_pulsephotons_150 = avtrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+# norm_pulsephotons = avtrace(dataset, [17, 18, 19, 20, 21])#, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+# norm_pulsephotons = avtrace(dataset, [1, 2, 3, 4, 5])
 # norm_pulsephotons = avtrace(dataset, [26, 27, 28, 29, 30])
 
 # particle_ = dataset['Particle 4']
@@ -84,7 +86,7 @@ norm_pulsephotons = avtrace(dataset, [6])#, 11, 12, 13, 14, 15, 16, 17, 18, 19, 
 # norm_pulsephotons /= norm_pulsephotons[0]
 # plt.plot(norm_pulsephotons[1:-9])
 plt.plot(norm_pulsephotons_150[:], label='725 mmol photons m$^{-2}$ s$^{-1}$')
-plt.plot(norm_pulsephotons[:], label='725 mmol photons m$^{-2}$ s$^{-1}$')
+# plt.plot(norm_pulsephotons[:], label='725 mmol photons m$^{-2}$ s$^{-1}$')
 
 
 # particle_ = dataset_thyl['Particle 23']
