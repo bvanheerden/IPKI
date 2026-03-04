@@ -3,8 +3,9 @@ import h5py
 from matplotlib import pyplot as plt
 import os
 
-data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\10 April 2025\Power study new'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\10 April 2025\Power study new'
 
+data_dir = 'blinking/10 April 2025/Power study new'
 
 dataset_3550 = h5py.File(os.path.join(data_dir, '3550.h5'), 'r')
 dataset_2531 = h5py.File(os.path.join(data_dir, '2531.h5'), 'r')

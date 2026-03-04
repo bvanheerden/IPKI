@@ -4,7 +4,8 @@ from matplotlib import pyplot as plt
 import os
 from scipy.signal import savgol_filter
 
-data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
+# data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
+data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/Modulate and gate'
 
 dataset = h5py.File(os.path.join(data_dir, '7 March 2025', 'Bleach kinetic new.h5'), 'r')
 

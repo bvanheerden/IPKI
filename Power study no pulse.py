@@ -1,17 +1,51 @@
 import numpy as np
 import os
 from matplotlib import pyplot as plt
+import seaborn as sns
 
-data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/12 April 2025/Power study traces'
+
+def boundints(bin_int):
+    on_ints = np.where(bin_int> 0.2)[0]  # Find indices where intensity is greater than 0.4
+    peakbounds = np.where(np.diff(on_ints) != 1)[0]  # Boundaries of peaks is where there is a gap
+
+    # Each gap is both a start and a stop of a peak, so we need to add the index after for each one in peakbounds.
+    result = []
+    for value in peakbounds:
+        result.append(value)
+        result.append(value+1)
+    peakbounds = np.array(result)
+
+    # Now we "hem in" a little to ensure we are not in the rise or falling edge of the peak.
+    peakbounds[0::2] -= 1
+    peakbounds[1::2] += 1
+    return np.insert(bin_int[on_ints[peakbounds]], 0, 1)
+
+
+def blink_bleach(bin_int, plot=False):
+    bndints = boundints(bin_int)
+    print(bndints)
+    blink = np.diff(bndints)[1::2]
+    bleach = -np.diff(bndints[::2])
+    if plot:
+        plt.plot(blink)
+        plt.show()
+    return np.mean(blink[-8:]), np.std(blink[-8:]) / np.sqrt(8), np.mean(bleach[-5:])
+
+
+# data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/1 May 2025/Power study traces'
+data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/3 June 2025/Power study 1'
 # Load the CSV file
 # Replace 'file.csv' with the path to your CSV file
 data = np.loadtxt(os.path.join(data_dir, 'Particle 1 trace.csv'), delimiter=',', skiprows=1)
 
 def avtrace(particles, stop=-1):
     bin_intensity = None
+    parts = []
     for part in particles:
         data = np.loadtxt(os.path.join(data_dir, f'Particle {part} trace.csv'), delimiter=',', skiprows=1)
-
+        parts.append(data)
+    stop = min(len(data) for data in parts)
+    for data in parts:
         bin_time = data[:stop, 1]    # Second column
         if bin_intensity is None:
             bin_intensity = data[:stop, 2]  # Third column
@@ -22,117 +56,56 @@ def avtrace(particles, stop=-1):
     return bin_time, bin_intensity
 
 
-bin_time_3000, bin_intensity_3000 = avtrace([2, 3, 4])
-bin_time_2500, bin_intensity_2500 = avtrace([5, 6, 7])
-bin_time_2000, bin_intensity_2000 = avtrace([8, 9, 10])
-bin_time_1500, bin_intensity_1500 = avtrace([11, 12, 13])
-bin_time_1000, bin_intensity_1000 = avtrace([14, 15, 16])
-bin_time_500, bin_intensity_500 = avtrace([17, 18, 19])
-bin_time_300, bin_intensity_300 = avtrace([20, 21, 22], stop=3000)
-bin_time_150, bin_intensity_150 = avtrace([23, 24])
+# bin_time_3800, bin_intensity_3800 = avtrace([3, 4, 5])
+bin_time_3800, bin_intensity_3800 = avtrace([1])
+# bin_time_2530, bin_intensity_2530 = avtrace([6, 7, 8, 9])
+bin_time_2530, bin_intensity_2530 = avtrace([2])
+# bin_time_1720, bin_intensity_1720 = avtrace([10, 11, 12, 13])
+bin_time_1720, bin_intensity_1720 = avtrace([3])
+bin_time_1140, bin_intensity_1140 = avtrace([5])
+# bin_time_750, bin_intensity_750 = avtrace([17, 18, 19])
+bin_time_500, bin_intensity_500 = avtrace([6])
+# bin_time_350, bin_intensity_350 = avtrace([26, 27])
+bin_time_230, bin_intensity_230 = avtrace([8])
+# bin_time_150, bin_intensity_150 = avtrace([29, 30, 32])
 
-# plt.plot(bin_time_3000, bin_intensity_3000)
-# plt.axhline(0.64, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.68, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.53, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.59, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.46, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.53, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.41, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.47, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.37, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.43, color='k', xmin=0.8, xmax=1)
-# plt.axhline(0.35, color='k', xmin=0.85, xmax=1)
+blink_3800, std_3800, bleach_3800 = blink_bleach(bin_intensity_3800)
+blink_2530, std_2530, bleach_2530 = blink_bleach(bin_intensity_2530)
+blink_1720, std_1720, bleach_1720 = blink_bleach(bin_intensity_1720)
+blink_1140, std_1140, bleach_1140 = blink_bleach(bin_intensity_1140)
+# blink_750, std_750, bleach_750 = blink_bleach(bin_intensity_750)
+blink_500, std_500, bleach_500 = blink_bleach(bin_intensity_500)
+# blink_350, std_350, bleach_350 = blink_bleach(bin_intensity_350)
+blink_230, std_230, bleach_230 = blink_bleach(bin_intensity_230)
+# blink_150, std_150, bleach_150 = blink_bleach(bin_intensity_150)
 
-# plt.plot(bin_time_2500, bin_intensity_2500)
-# plt.axhline(0.61, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.67, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.50, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.55, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.43, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.47, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.37, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.42, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.33, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.38, color='k', xmin=0.8, xmax=1)
+# blinks = [blink_3800, blink_2530, blink_1720, blink_1140, blink_750, blink_500, blink_350]#, blink_230, blink_150]
+blinks = [blink_3800, blink_2530, blink_1720, blink_1140, blink_500, blink_230]#, blink_150]
+stds = [std_3800, std_2530, std_1720, std_1140, std_500, std_230]#, std_150]
+# stds = [std_3800, std_2530, std_1720, std_1140, std_750, std_500, std_350]#, std_230, std_150]
+bleachs = [bleach_3800, bleach_2530, bleach_1720, bleach_1140, bleach_500, bleach_230]
+# bleachs = [bleach_3800, bleach_2530, bleach_1720, bleach_1140, bleach_750, bleach_500, bleach_350]#, bleach_230, bleach_150]
+powers = [3800, 2530, 1720, 1140, 500, 230]
+mE = [986, 657, 445, 296, 130, 60]
 
-plt.plot(bin_time_2000, bin_intensity_2000)
-plt.axhline(0.61, color='k', xmin=0.1, xmax=0.3)
-plt.axhline(0.64, color='k', xmin=0.2, xmax=0.4)
-plt.axhline(0.50, color='k', xmin=0.25, xmax=0.45)
-plt.axhline(0.55, color='k', xmin=0.35, xmax=0.55)
-plt.axhline(0.43, color='k', xmin=0.4, xmax=0.6)
-plt.axhline(0.46, color='k', xmin=0.5, xmax=0.7)
-plt.axhline(0.37, color='k', xmin=0.55, xmax=0.75)
-plt.axhline(0.42, color='k', xmin=0.65, xmax=0.85)
-plt.axhline(0.33, color='k', xmin=0.7, xmax=0.9)
+sns.set_context('talk')
 
-# plt.plot(bin_time_1500, bin_intensity_1500)
-# plt.axhline(0.61, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.65, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.50, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.54, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.42, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.46, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.37, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.41, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.32, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.36, color='k', xmin=0.8, xmax=1)
+plt.figure(figsize=(10, 6))
+plt.errorbar(powers[:], blinks[:], stds, None, 'o', capsize=5, label='Blink')
+# plt.plot(powers, bleachs, label='Bleach')
+plt.xlabel('Photon flux (mE)')
+plt.ylabel('Blinking yield')
+plt.ylim(0, 0.1)
+plt.tight_layout()
 
-# plt.plot(bin_time_1000, bin_intensity_1000)
-# plt.axhline(0.62, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.65, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.51, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.55, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.45, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.48, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.39, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.44, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.35, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.38, color='k', xmin=0.8, xmax=1)
-
+# plt.plot(bin_time_3800, bin_intensity_3800)
+# plt.plot(bin_time_2530, bin_intensity_2530)
+# plt.plot(bin_time_1720, bin_intensity_1720)
+# plt.plot(bin_time_1140, bin_intensity_1140)
+# plt.plot(bin_time_750, bin_intensity_750)
 # plt.plot(bin_time_500, bin_intensity_500)
-# plt.axhline(0.70, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.72, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.61, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.65, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.55, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.58, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.51, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.54, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.47, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.50, color='k', xmin=0.8, xmax=1)
-# plt.axhline(0.44, color='k', xmin=0.85, xmax=1)
-
-# plt.plot(bin_time_300, bin_intensity_300)
-# plt.axhline(0.76, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.78, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.68, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.71, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.63, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.66, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.59, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.62, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.56, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.58, color='k', xmin=0.8, xmax=1)
-
+# plt.plot(bin_time_350, bin_intensity_350)
+# plt.plot(bin_time_230, bin_intensity_230)
 # plt.plot(bin_time_150, bin_intensity_150)
-# plt.axhline(0.81, color='k', xmin=0.1, xmax=0.3)
-# plt.axhline(0.83, color='k', xmin=0.2, xmax=0.4)
-# plt.axhline(0.74, color='k', xmin=0.25, xmax=0.45)
-# plt.axhline(0.75, color='k', xmin=0.35, xmax=0.55)
-# plt.axhline(0.69, color='k', xmin=0.4, xmax=0.6)
-# plt.axhline(0.71, color='k', xmin=0.5, xmax=0.7)
-# plt.axhline(0.65, color='k', xmin=0.55, xmax=0.75)
-# plt.axhline(0.66, color='k', xmin=0.65, xmax=0.85)
-# plt.axhline(0.61, color='k', xmin=0.7, xmax=0.9)
-# plt.axhline(0.64, color='k', xmin=0.8, xmax=1)
 
-# plt.plot(bin_time_2500, bin_intensity_2500)
-# plt.plot(bin_time_2000, bin_intensity_2000)
-# plt.plot(bin_time_1500, bin_intensity_1500)
-# plt.plot(bin_time_1000, bin_intensity_1000)
-# plt.plot(bin_time_500, bin_intensity_500)
-# plt.plot(bin_time_300, bin_intensity_300)
-# plt.plot(bin_time_150, bin_intensity_150)
 plt.show()

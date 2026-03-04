@@ -6,7 +6,8 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import dual_annealing
 from scipy.optimize import curve_fit
 
-data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
+# data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
+data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/Modulate and gate'
 
 timestep = 0.125  # time step of intensity trace in seconds
 p0 = [1 / 20, 1 / 3, 1 / 1.97, 1 / 6.92, 1 / 0.3, 1 / 2.61, 1/1, 1/5, 0.7, 0.3, 0.005, 0.004, 0]
