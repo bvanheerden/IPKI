@@ -15,10 +15,10 @@ dataset = h5py.File(os.path.join(data_dir, '12 April 2025', '2500uW new.h5'), 'r
 
 
 def kinetic(t, y, k1, k2, k3, k4, k5, k6, k7, k8):
-    K = np.array([[-k5,  k3,  k8,  k4],  # Bleached
+    K = np.array([[0,  k3,  k8,  k4],  # Bleached
                   [0, -k2-k3, 0, k1],  # Quenced
                   [0, 0, -k8, 0],  # UnQuenched 2
-                  [k5,  k2, 0, -k1-k4]])  # Unquenched
+                  [0,  k2, 0, -k1-k4]])  # Unquenched
     return K @ y
 
 

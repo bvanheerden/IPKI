@@ -31,11 +31,11 @@ def kinetic(t, y, k1, k2, k3, k4, k5, k6, k7, k8):
 
 def modelfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0, t_dark, t_light, t_dark2):
     sol1 = solve_ivp(kinetic, [t[0], t[t_dark+1]], [0, 0, q0, y0], t_eval=t[0:t_dark+1],
-                     args=[k1, k2, 0, 0, 0, 0, 0, k8])
+                     args=[k1, k2, 0, k4, 0, 0, 0, k8])
     sol2 = solve_ivp(kinetic, [t[t_dark], t[t_light+1]], sol1.y[:, -1], t_eval=t[t_dark:t_light+1],
                      args=[0, k2, 0, 0, 0, 0, 0, 0])
     sol3 = solve_ivp(kinetic, [t[t_light], t[t_dark2+1]], sol2.y[:, -1], t_eval=t[t_light:t_dark2+1],
-                     args=[k1, k2, 0, 0, 0, 0, 0, k8])
+                     args=[k1, k2, 0, k4, 0, 0, 0, k8])
     sol4 = solve_ivp(kinetic, [t[t_dark2], t[-1]], sol3.y[:, -1], t_eval=t[t_dark2:-1],
                      args=[0, k2, 0, 0, 0, 0, 0, 0])
     return sol1, sol2, sol3, sol4
@@ -82,7 +82,8 @@ def fittrace(dataset, partnums):
     # print(t_dark, t_light, t_dark2)
 
     def fitfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, y0, q0):
-        sol1, sol2, sol3, sol4 = modelfunc(t, k1, 1, k3, k4, k5, k6, k7, k8, 0.63, 0.36, t_dark, t_light, t_dark2)#+int(
+        sol1, sol2, sol3, sol4 = modelfunc(t, k1, k2, k3, k4, k5, k6, k7, k8, 0.63, 0.36, t_dark, t_light,
+                                           t_dark2)#+int(
         # t_dark_offset*1e10))
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:]))
@@ -181,6 +182,7 @@ params_list = [params_150, params_225, params_338, params_506, params_760, param
 tau1s = np.array([params[0] for params in params_list])
 tau2s = np.array([params[1] for params in params_list])
 tau8s = np.array([params[2] for params in params_list])
+tau4s = np.array([params[3] for params in params_list])
 y0s = np.array([params[7] for params in params_list])
 q0s = np.array([params[8] for params in params_list])
 print(np.mean(tau2s))
@@ -188,11 +190,12 @@ print(np.mean(y0s))
 print(np.mean(q0s))
 
 plt.figure()
-plt.loglog(powers, 1/tau1s, '-o', label=r'$k_1$')
+plt.plot(powers, tau1s, '-o', label=r'$k_1$')
 # plt.loglog(powers, tau2s)
-plt.loglog(powers, 1/tau8s, '-o', label=r'$k_3$')
+plt.plot(powers, tau8s, '-o', label=r'$k_8$')
+plt.plot(powers, tau4s, '-o', label=r'$k_4$')
 plt.xlim(100, 2000)
-plt.ylim(0.01, 1)
+# plt.ylim(0.01, 1)
 plt.xlabel('Power (uW)')
 plt.ylabel('Rate constant (s$^{-1}$)')
 plt.legend()
