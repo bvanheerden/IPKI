@@ -229,11 +229,11 @@ if compute:
         'tau7_se': tau7_se
     }
 
-    with open('variables.pkl', 'wb') as f:
+    with open('../variables.pkl', 'wb') as f:
         pickle.dump(variables_to_pickle, f)
 
 # Unpickle the variables
-with open('variables.pkl', 'rb') as f:
+with open('../variables.pkl', 'rb') as f:
     variables = pickle.load(f)
 
 # Access the variables

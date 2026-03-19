@@ -7,7 +7,7 @@ from scipy.optimize import dual_annealing
 from scipy.optimize import curve_fit
 
 # data_dir = 'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate'
-data_dir = 'blinking'
+data_dir = '../blinking'
 
 timestep = 0.125  # time step of intensity trace in seconds
 p0 = [1 / 20, 1 / 1.55, 1 / 550.7, 1 / 17.5, 1 / 54, 1 / 500.61, 1/0.1, 1/1, 0.9, 0.1]
