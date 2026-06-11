@@ -4,44 +4,24 @@ from matplotlib import pyplot as plt
 import os
 from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
+from scipy.ndimage import uniform_filter1d, median_filter
 
-# data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek'
-data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\27 May 2026'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\1 June 2026\New power study Thylakoid\602 mE'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\1 June 2026\Power study Thylakoid\602 mE'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\29 May 2026\Power study LHCII\301 mE'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\2 June 2026\Thylakoid power study\301 mE'
+data_dir = r'C:\Users\Bio Physics\Desktop\Temp meas\Chl less glycerol'
+# data_dir = r'C:\Users\Bio Physics\Desktop\Temp meas\Thyl AA Power new 3\19 mE'
+# data_dir = r'C:\Users\Bio Physics\Desktop\Temp meas\test'
 
-timestep = 0.05  # time step of intensity trace in seconds
+timestep = 0.1  # time step of intensity trace in seconds
 p0 = [1 / 4, 1 / 6, 1 / 10, 1 / 3, 0.5]
 
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '5900 uW.h5'), 'r')
-# startind = 4
-# onlen = 19
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '3900 uW.h5'), 'r')
-# startind = 1
-# onlen = 29
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '2780 uW.h5'), 'r')
-# startind = 3
-# onlen = 45
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '1120 uW.h5'), 'r')
-# startind = 1
-# onlen = 97
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '520 uW.h5'), 'r')
-# startind = 2
-# onlen = 206
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '224 uW.h5'), 'r')
-# startind = 1
-# onlen = 467
-
-# dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '90 uW.h5'), 'r')
-dataset = h5py.File(os.path.join(data_dir, 'Chl a PAM.h5'), 'r')
 startind = 3
-onlen = 690
+onlen = 50
 
 onlyplot = True
-offlen = 181
+offlen = 600
 
 
 def kinetic(t, y, k1, k2, k3, k4):
@@ -68,11 +48,9 @@ def modelfunc(t, k1, k2, k3, k4, q0, t_dark, t_light, t_dark2, t_light2, t_dark3
     return sol1, sol2, sol3, sol4, sol5, sol6
 
 
-def onetrace(dataset, partnum):
-
-    particle_ = dataset[f'Particle {partnum}']
-    abstimes = particle_['Absolute Times (ns)']
-    # print(particle_.attrs['Description'])
+def onetrace(partnum):
+    dataset = h5py.File(os.path.join(data_dir, f'measurement {partnum}.h5'), 'r')
+    abstimes = dataset['timestamps'][:] * 50
 
     difftime = np.diff(abstimes)
     boundary_photons = np.where(difftime > 20e6)[0]
@@ -85,22 +63,24 @@ def onetrace(dataset, partnum):
     norm_pulsephotons = pulsephotons / ms_pulse[1:]
     norm_pulsephotons /= np.mean(norm_pulsephotons[startind])
     norm_pulsephotons = norm_pulsephotons[np.isfinite(norm_pulsephotons)]
+    # norm_pulsephotons = uniform_filter1d(norm_pulsephotons, size=3)
+    # norm_pulsephotons = median_filter(norm_pulsephotons, size=4)
     return norm_pulsephotons[:]
 
 
-def avtrace(dataset, partnums):
-    partnums_ = [onetrace(dataset, partnum) for partnum in partnums]
+def avtrace(partnums):
+    partnums_ = [onetrace(partnum) for partnum in partnums]
     minlength = np.min([len(partnum) for partnum in partnums_])
     partnums_ = [partnum[:minlength] for partnum in partnums_]
     return np.mean(partnums_, axis=0)
 
 
-def fittrace(dataset, partnums):
+def fittrace(partnums):
 
     if onlyplot:
-        norm_pulsephotons = avtrace(dataset, partnums)[:]
+        norm_pulsephotons = avtrace(partnums)[:]
     else:
-        norm_pulsephotons = avtrace(dataset, partnums)[startind:]
+        norm_pulsephotons = avtrace(partnums)[startind:]
     datapoints = len(norm_pulsephotons) + 1
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
@@ -148,17 +128,17 @@ def fittrace(dataset, partnums):
     return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau3, tau4, q0
 
 
-# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-#                                                                                    12, 13, 14, 15, 16, 17, 18, 19, 20])
-# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-                                                                          # 12, 13, 14, 15, 16, 17, 18, 19, 20])
-norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [14, 15, 16])
-# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 4, 7, 8, 9, 10])
+# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace([0, 1, 2, 3, 5, 6, 7, 8])
+# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace([1, 2, 3, 4])
+norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace([0])
+
+
 if not onlyplot:
     plt.plot(t_225, norm_pulsephotons_225[:], '--', color='gray')
     plt.plot(t_225, model_225[:], '-')
 else:
-    plt.plot(norm_pulsephotons_225[:], '--', color='gray')
+    plt.plot(t_225, norm_pulsephotons_225[:], '-', color='gray')
 
 # plt.grid()
 plt.xlabel('Time (s)')
