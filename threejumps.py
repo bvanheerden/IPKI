@@ -74,15 +74,18 @@ def onetrace(dataset, partnum):
     abstimes = particle_['Absolute Times (ns)']
     # print(particle_.attrs['Description'])
 
+    print(np.max(abstimes))
     difftime = np.diff(abstimes)
     boundary_photons = np.where(difftime > 20e6)[0]
     boundary_times = abstimes[boundary_photons]
     boundary_times_start = abstimes[boundary_photons + 1]
     boundary_times_start = np.insert(boundary_times_start, 0, abstimes[0])
     ms_pulse = (boundary_times - boundary_times_start[:-1]) / 1e6
+    print(ms_pulse)
 
     pulsephotons = np.diff(boundary_photons)
     norm_pulsephotons = pulsephotons / ms_pulse[1:]
+    print(norm_pulsephotons)
     norm_pulsephotons /= np.mean(norm_pulsephotons[startind])
     norm_pulsephotons = norm_pulsephotons[np.isfinite(norm_pulsephotons)]
     return norm_pulsephotons[:]
