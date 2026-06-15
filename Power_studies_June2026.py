@@ -2,10 +2,10 @@ import numpy as np
 import h5py
 import os
 import json
-from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
 import pandas as pd
 from matplotlib import pyplot as plt
+import kinetic_model
 
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
@@ -13,7 +13,7 @@ base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 J
 # Default parameters (used if no config file is found)
 default_params = {
     'partlist': [0, 1, 2],
-    'p0': [1 / 4, 1 / 6, 1 / 10, 1 / 3, 0.5],
+    'p0': [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 0.5],
     'onlen': 50,
     'offlen': 200,
     'startind': 6,
@@ -43,75 +43,12 @@ def load_config(folder_path):
     return params
 
 
-def kinetic(t, y, k1, k2, k3, k4):
-    K = np.array([[0,  0,  k4,  k3],  # Bleached
-                  [0, -k2, 0, k1],  # Quenced
-                  [0, 0, -k4, 0],  # UnQuenched 2
-                  [0,  k2, 0, -k1-k3]])  # Unquenched
-    return K @ y
-
-
-def modelfunc(t, k1, k2, k3, k4, q0, t_dark, t_light, t_dark2, t_light2, t_dark3):
-    sol1 = solve_ivp(kinetic, [t[0], t[t_dark+1]], [0, 0, q0, 1-q0], t_eval=t[0:t_dark+1],
-                     args=[k1, k2, k3, k4])
-    sol2 = solve_ivp(kinetic, [t[t_dark], t[t_light+1]], sol1.y[:, -1], t_eval=t[t_dark:t_light+1],
-                     args=[0, k2, 0, 0])
-    sol3 = solve_ivp(kinetic, [t[t_light], t[t_dark2+1]], sol2.y[:, -1], t_eval=t[t_light:t_dark2+1],
-                     args=[k1, k2, k3, k4])
-    sol4 = solve_ivp(kinetic, [t[t_dark2], t[t_light2+1]], sol3.y[:, -1], t_eval=t[t_dark2:t_light2+1],
-                     args=[0, k2, 0, 0])
-    sol5 = solve_ivp(kinetic, [t[t_light2], t[t_dark3+1]], sol4.y[:, -1], t_eval=t[t_light2:t_dark3+1],
-                     args=[k1, k2, k3, k4])
-    sol6 = solve_ivp(kinetic, [t[t_dark3], t[-1]], sol5.y[:, -1], t_eval=t[t_dark3:-1],
-                     args=[0, k2, 0, 0])
-    return sol1, sol2, sol3, sol4, sol5, sol6
-
-
-def onetrace(data_dir, partnum, startind, low_value_threshold):
-    dataset = h5py.File(os.path.join(data_dir, f'measurement {partnum}.h5'), 'r')
-    abstimes = dataset['timestamps'][:] * 50  # 50 ns clock
-
-    difftime = np.diff(abstimes)
-    boundary_photons = np.where(difftime > 20e6)[0]  # gap is at least 20 ms
-    boundary_times = abstimes[boundary_photons]  # end of pulse (start of gap)
-    boundary_times_start = abstimes[boundary_photons + 1]  # start of pulse
-    boundary_times_start = np.insert(boundary_times_start, 0, abstimes[0])  # first photon is start of first pulse
-    ms_pulse = (boundary_times - boundary_times_start[:-1]) / 1e6  # length of each pulse in ms
-    timestep = np.mean(np.diff(boundary_times_start) / 1e9)  # timestep in s
-
-    pulsephotons = np.diff(boundary_photons)
-    norm_pulsephotons = pulsephotons / ms_pulse[1:]
-    norm_pulsephotons /= np.mean(norm_pulsephotons[startind])
-
-    # Remove infs first
-    norm_pulsephotons = norm_pulsephotons[np.isfinite(norm_pulsephotons)]
-
-    # Replace extra-low values with the previous value
-    mean_val = np.mean(norm_pulsephotons)
-    threshold = float(mean_val * low_value_threshold)
-    for i in range(1, len(norm_pulsephotons)):
-        if norm_pulsephotons[i] < threshold:
-            norm_pulsephotons[i] = norm_pulsephotons[i - 1]
-
-    # norm_pulsephotons = uniform_filter1d(norm_pulsephotons, size=3)
-    # norm_pulsephotons = median_filter(norm_pulsephotons, size=4)
-    return norm_pulsephotons[:], timestep
-
-
-def avtrace(data_dir, partnums, startind, low_value_threshold):
-    partnums_ = [onetrace(data_dir, partnum, startind, low_value_threshold)[0] for partnum in partnums]
-    minlength = np.min([len(partnum) for partnum in partnums_])
-    partnums_ = [partnum[:minlength] for partnum in partnums_]
-    timesteps = [onetrace(data_dir, partnum, startind, low_value_threshold)[1] for partnum in partnums]
-    return np.mean(partnums_, axis=0), np.mean(timesteps, axis=0)
-
-
 def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshold, k2_fixed):
 
     if onlyplot:
-        norm_pulsephotons, timestep = avtrace(data_dir, partnums, startind, low_value_threshold)
+        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partnums, startind=startind, low_value_threshold=low_value_threshold)
     else:
-        norm_pulsephotons, timestep = avtrace(data_dir, partnums, startind, low_value_threshold)
+        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partnums, startind=startind, low_value_threshold=low_value_threshold)
         norm_pulsephotons = norm_pulsephotons[startind:]
     datapoints = len(norm_pulsephotons) + 1
     endpoint = datapoints * timestep
@@ -125,10 +62,9 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k3, k4, q0):
-        sol1, sol2, sol3, sol4, sol5, sol6 = modelfunc(t, k1, k2_fixed, k3, k4, 0.207, t_dark,
-        # sol1, sol2, sol3, sol4, sol5, sol6 = modelfunc(t, k1, k2, k3, k4, q0, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3)
+    def fitfunc(t, k1, k2, k2_light, k3, k4, q0):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2_fixed, k3, k4, 0.207, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
 
@@ -136,22 +72,25 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
     if onlyplot:
         popt = p0
     else:
-        popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0],
-                                       [10, 10, 10, 10, 1]), verbose=2)
+        popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0],
+                                       [10, 10, 10, 10, 10, 1]), verbose=2)
 
     k1 = popt[0]
     k2 = popt[1]
-    k3 = popt[2]
-    k4 = popt[3]
-    q0 = popt[4]
+    k2_light = popt[2]
+    k3 = popt[3]
+    k4 = popt[4]
+    q0 = popt[5]
 
     tau1 = 1 / k1
     tau2 = 1 / k2
+    tau2_light = 1 / k2_light
     tau3 = 1 / k3
     tau4 = 1 / k4
 
     print(f'K1 = {k1:.4f} s⁻¹, Tau1 = {tau1:.2f} s')
     print(f'K2 = {k2:.4f} s⁻¹, Tau2 = {tau2:.2f} s')
+    print(f'K2_light = {k2_light:.4f} s⁻¹, Tau2_light = {tau2_light:.2f} s')
     print(f'K3 = {k3:.4f} s⁻¹, Tau3 = {tau3:.2f} s')
     print(f'K4 = {k4:.4f} s⁻¹, Tau4 = {tau4:.2f} s')
     print(f'Q0 = {q0:.2f} cps')
@@ -160,9 +99,9 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, k1, k2, k3, k4, q0)
+        model = fitfunc(t_plot, k1, k2, k2_light, k3, k4, q0)
 
-    return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau3, tau4, q0, k1, k2, k3, k4
+    return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau2_light, tau3, tau4, q0, k1, k2, k2_light, k3, k4
 
 
 # Loop through all power folders and collect results
@@ -216,21 +155,23 @@ for folder_name in all_folders:
     try:
         # Fit the trace and store result tuple
         result = fittrace(folder_path, partlist, onlen, offlen, startind, p0, low_value_threshold, k2_fixed)
-        # result = (norm_pulsephotons, model, t_plot, tau1, tau2, tau3, tau4, q0, k1, k2, k3, k4)
+        # result = (norm_pulsephotons, model, t_plot, tau1, tau2, tau2_light, tau3, tau4, q0, k1, k2, k2_light, k3, k4)
 
         # Store results
         results.append({
             'Power': power_str,
             'AA': 'Yes' if has_aa else 'No',
-            'K1 (s⁻¹)': result[8],   # k1
-            'K2 (s⁻¹)': result[9],   # k2
-            'K3 (s⁻¹)': result[10],  # k3
-            'K4 (s⁻¹)': result[11],  # k4
+            'K1 (s⁻¹)': result[9],   # k1
+            'K2 (s⁻¹)': result[10],   # k2
+            'K2_light (s⁻¹)': result[11], # k2_light
+            'K3 (s⁻¹)': result[12],  # k3
+            'K4 (s⁻¹)': result[13],  # k4
             'Tau1 (s)': result[3],   # tau1
             'Tau2 (s)': result[4],   # tau2
-            'Tau3 (s)': result[5],   # tau3
-            'Tau4 (s)': result[6],   # tau4
-            'Q0': result[7]          # q0
+            'Tau2_light (s)': result[5], # tau2_light
+            'Tau3 (s)': result[6],   # tau3
+            'Tau4 (s)': result[7],   # tau4
+            'Q0': result[8]          # q0
         })
 
         # Create and save individual trace plot

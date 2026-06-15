@@ -5,7 +5,7 @@ import os
 from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
 
-data_dir = 'blinking'
+data_dir = '../blinking'
 
 timestep = 0.125  # time step of intensity trace in seconds
 p0 = [1 / 20, 1 / 1.55, 1 / 20.7, 1 / 17.5, 0.9, 0.1]
