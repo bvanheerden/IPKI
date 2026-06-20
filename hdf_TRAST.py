@@ -4,6 +4,7 @@ from scipy.optimize import curve_fit
 from scipy.ndimage import uniform_filter1d
 from matplotlib import pyplot as plt
 import h5py
+import os
 
 
 
@@ -315,85 +316,183 @@ class TRASTAnalyzer:
 if __name__ == "__main__":
 
     np.random.seed(0)
+    folder_path = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/'
 
-    pulse_widths = np.array([
-        200e-9,
-        500e-9,
-        1e-6,
-        2e-6,
-        5e-6,
-        10e-6,
-        20e-6,
-        50e-6,
-        100e-6,
-        200e-6,
-        500e-6,
-        1e-3,
-        2e-3,
-        5e-3,
-        10e-3,
-        20e-3,
-        50e-3,
-        100e-3,
-        200e-3,
-        500e-3,
-        1,
-        2,
-        5
-    ])
+    file_list = [
+        # r'14 May 2026/TRAST Control 1.h5',
+        # r'14 May 2026/TRAST Control 2.h5',
+        # r'14 May 2026/TRAST Control 3.h5',
+        # r'14 May 2026/TRAST No Ox 1.h5',
+        # r'14 May 2026/TRAST No Ox 2.h5',
+        # r'14 May 2026/TRAST AA 2.h5',
+        # r'14 May 2026/TRAST Magnet 2.h5',
+        # r'14 May 2026/TRAST Magnet 3.h5',
+        # r'19 May 2026/TRAST FC 2.h5',
+        # r'14 May 2026/TRAST AA 2.h5',
+        r'19 June 2026/TRAST long timescale F4.h5',
+        # Add more files here
+    ]
 
-    particle_nums = np.arange(1, 25, 1).astype(int)
-    particle_nums = np.delete(particle_nums, 20)
-    print(particle_nums)
+    # Create a single plot for all datasets
+    plt.figure(figsize=(10, 8))
+    ax = plt.gca()
+    colors = plt.cm.tab10.colors  # Use a standard color cycle
 
-    h5data = h5py.File(r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\11 May 2026\TRAST.h5', 'r')
+    for i, file_path in enumerate(file_list):
+        color = colors[i % len(colors)]
+        print("\n" + "=" * 60)
+        print(f"Processing file: {file_path}")
+        print("=" * 60)
 
-    datasets = []
-    acquisition_times = []
-    duty_cycles = []
-    for partnum in particle_nums:
-        particle = h5data[f'Particle {partnum}']
-        abstimes = particle['Absolute Times (ns)'][:] / 1e9
-        print(particle.name)
-        print(particle.attrs['Description'].splitlines()[1])
-        datasets.append(abstimes)
-        acquisition_time = abstimes[-1]
-        print(acquisition_time)
-        acquisition_times.append(acquisition_time)
-        if partnum < 23:
-            duty_cycles.append(0.1)
-        elif partnum == 23:
-            duty_cycles.append(0.2)
+        h5data = h5py.File(folder_path + file_path, 'r')
+
+        # Try to get pulse widths from file attributes or define them per file
+        # For now, using the common one or defining it based on the file
+        if 'TRAST Control 1.h5' in file_path:
+            pulse_widths = np.array([
+                200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3,
+            ])
+            particle_nums = np.arange(2, len(pulse_widths) + 2, 1).astype(int)
+
+        elif 'TRAST Control 2.h5' in file_path:
+            pulse_widths = np.array([
+                200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3,
+            ])
+            particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
+
+        elif 'TRAST Control 3.h5' in file_path:
+            pulse_widths = np.array([
+                200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1,
+            ])
+            particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
+        elif 'TRAST No Ox 1.h5' in file_path:
+            pulse_widths = np.array([
+                200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3,
+            ])
+            particle_nums = np.arange(2, len(pulse_widths) + 2, 1).astype(int)
+        elif 'TRAST No Ox 2.h5' in file_path:
+            pulse_widths = np.array([
+                200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3,
+            ])
+            # particle_nums = np.arange(2, len(pulse_widths) + 2, 1).astype(int)
+            particle_nums = np.arange(24, len(pulse_widths) + 23, 1).astype(int)  # AA 1
+        elif '20 May' in file_path:
+            pulse_widths = np.array([
+                200e-9, 1e-6, 5e-6, 20e-6, 100e-6, 500e-6,
+                2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1
+            ])
+            particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
         else:
-            duty_cycles.append(0.5)
+            # Default or other pulse widths
+            pulse_widths = np.array([
+                1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1,
+            ])
+            particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
+        print(f"Particles to process: {particle_nums}")
 
+        datasets = []
+        acquisition_times = []
+        duty_cycles = []
+        for partnum in particle_nums:
+            particle_key = f'Particle {partnum}'
+            if particle_key not in h5data:
+                print(f"Warning: {particle_key} not found in {file_path}")
+                continue
 
-    analyzer = TRASTAnalyzer(
-        datasets=datasets,
-        pulse_widths=pulse_widths,
-        acquisition_times=acquisition_times,
-        duty_cycles=duty_cycles,
-        fast_threshold=200e-3
-    )
+            particle = h5data[particle_key]
+            abstimes = particle['Absolute Times (ns)'][:] / 1e9
+            print(f"  {particle.name}: {particle.attrs.get('Description', 'No description').splitlines()[0] if 'Description' in particle.attrs else ''}")
+            datasets.append(abstimes)
+            acquisition_time = abstimes[-1]
+            acquisition_times.append(acquisition_time)
+            if partnum < 23:
+                duty_cycles.append(0.2)
+            elif partnum == 23:
+                duty_cycles.append(0.2)
+            else:
+                duty_cycles.append(0.5)
 
-    taus, trast = analyzer.analyze()
+        # Update pulse_widths if some particles were missing or specifically selected
+        # The number of datasets collected must match the number of pulse widths used in analysis
+        pulse_widths = pulse_widths[:len(datasets)]
 
-    # ---------------------------------------------------------
-    # TRAST curve
-    # ---------------------------------------------------------
+        analyzer = TRASTAnalyzer(
+            datasets=datasets,
+            pulse_widths=pulse_widths,
+            acquisition_times=acquisition_times,
+            duty_cycles=duty_cycles,
+            fast_threshold=200e-3
+        )
 
-    plt.figure(figsize=(6, 5))
+        taus, trast = analyzer.analyze()
 
-    plt.semilogx(
-        taus,
-        trast,
-        'o-'
-    )
+        # ---------------------------------------------------------
+        # TRAST curve
+        # ---------------------------------------------------------
+
+        plt.semilogx(
+            taus,
+            trast,
+            'o',
+            color=color,
+            label=f"{os.path.basename(file_path)} (data)"
+        )
+
+        # ---------------------------------------------------------
+        # Fit TRAST curve
+        # ---------------------------------------------------------
+
+        def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl):
+            """
+            TRAST model for triplet state + another reversible dark state + bleaching.
+            tau_T: Triplet lifetime
+            A: Triplet amplitude
+            tau_D: Second dark state lifetime
+            A_D: Second dark state amplitude
+            tau_bl: Bleaching lifetime
+            """
+            triplet = A * (1 - (1 - np.exp(-tau / tau_T)) / (tau / tau_T))
+            dark_state2 = A_D * (1 - (1 - np.exp(-tau / tau_D)) / (tau / tau_D))
+            bleaching = (1 - np.exp(-tau / tau_bl)) / (tau / tau_bl)
+
+            return (1 - triplet - dark_state2) * bleaching
+
+        try:
+            # Initial guesses: tau_T = 1ms, A = 0.2, tau_D = 10ms, A_D = 0.1, tau_bl = 100ms
+            p0 = [1e-3, 0.2, 10e-3, 0.1, 2]
+            bounds = ([1e-7, 0, 1e-6, 0, 1], [1e-1, 1, 1, 1, 100])
+            popt, pcov = curve_fit(trast_model, taus, trast, p0=p0, bounds=bounds)
+
+            tau_T_fit, A_fit, tau_D_fit, A_D_fit, tau_bl_fit = popt
+            perr = np.sqrt(np.diag(pcov))
+
+            print(f"\nFit Results for {os.path.basename(file_path)}:")
+            print(f"Triplet lifetime (tau_T): {tau_T_fit * 1e6:.2f} ± {perr[0] * 1e6:.2f} µs")
+            print(f"Triplet Amplitude (A): {A_fit:.3f} ± {perr[1]:.3f}")
+            print(f"Dark State 2 lifetime (tau_D): {tau_D_fit * 1e3:.2f} ± {perr[2] * 1e3:.2f} ms")
+            print(f"Dark State 2 Amplitude (A_D): {A_D_fit:.3f} ± {perr[3]:.3f}")
+            print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2f} ± {perr[4] * 1e3:.2f} ms")
+
+            # Plot fit
+            tau_fine = np.logspace(np.log10(taus.min()), np.log10(taus.max()), 100)
+            plt.semilogx(tau_fine, trast_model(tau_fine, *popt), '-', color=color,
+                         label=f'Fit {os.path.basename(file_path)}')
+
+        except Exception as e:
+            print(f"\nFitting failed for {file_path}: {e}")
+
+        h5data.close()
 
     plt.xlabel("Pulse width (s)")
     plt.ylabel("Normalized TRAST signal")
-    plt.title("TRAST Curve")
-    plt.grid(True)
+    plt.title("TRAST Curves Comparison")
+    plt.grid(False)
+    plt.legend(loc='upper right')
     plt.tight_layout()
     plt.show()
 
@@ -402,7 +501,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
 
     analyzer.reconstruct_trace(
-        dataset_index=-1,
-        bin_width=0.05,
-        duty=0.5
-    )
+         dataset_index=-1,
+         bin_width=0.05,
+         duty=0.2
+     )
