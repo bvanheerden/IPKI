@@ -82,8 +82,10 @@ class TRASTAnalyzer:
 
         signals = np.array(signals)
 
-        # normalize
-        signals /= signals[0]
+        # normalize to the signal from the shortest pulse
+        # find the index of the minimum pulse width
+        min_idx = np.argmin(self.pulse_widths)
+        signals /= signals[min_idx]
 
         return self.pulse_widths, signals
 
@@ -100,13 +102,9 @@ class TRASTAnalyzer:
     ):
 
         rep_period = pulse_width / duty
-
         n_cycles = acquisition_time / rep_period
-
         total_on_time = n_cycles * pulse_width
-
         counts = len(photons)
-
         intensity = counts / total_on_time
 
         return intensity
@@ -123,43 +121,22 @@ class TRASTAnalyzer:
             duty
     ):
 
-        rep_period = (
-                pulse_width / duty
-        )
-
-        phase = self.find_pulse_phase(
-            photons,
-            pulse_width,
-            acquisition_time,
-            duty
-        )
-
-        pulse_starts = np.arange(
-            phase,
-            acquisition_time,
-            rep_period
-        )
-        print(pulse_starts)
-
-        intensities = []
-
-        for start in pulse_starts:
-
-            stop = start + pulse_width
-            if stop > acquisition_time:
-                continue
-            n = np.sum(
-                (photons >= start)
-                & (photons < stop)
-            )
-            intensities.append(
-                n / pulse_width
-            )
-
-        if len(intensities) == 0:
-            return np.nan
-
-        return np.mean(intensities)
+        rep_period = pulse_width / duty
+        
+        # Trim the acquisition time to an exact multiple of the pulse period
+        n_cycles = int(acquisition_time // rep_period)
+        trimmed_time = n_cycles * rep_period
+        
+        # Count photons within the trimmed time
+        counts = np.sum(photons < trimmed_time)
+        
+        # Total laser-on time within the trimmed window
+        total_on_time = n_cycles * pulse_width
+        
+        if total_on_time == 0:
+            return 0.0
+            
+        return counts / total_on_time
 
     # =========================================================
     # PHASE RECOVERY
@@ -232,13 +209,36 @@ class TRASTAnalyzer:
                     rates[mask]
                 )
 
+        # Smooth phase signal to get a more robust peak
+        window = max(3, nbins // 20)
+        if window % 2 == 0: window += 1
+        phase_signal = uniform_filter1d(phase_signal, size=window, mode='wrap')
+
         # pulse starts where folded signal peaks
-        peak_idx = np.argmax(
-            phase_signal
-        )
-
-        phase = phase_bins[peak_idx]
-
+        # For a better estimate of the START of the pulse, we look for the rising edge
+        # instead of the peak.
+        
+        threshold = (np.max(phase_signal) + np.min(phase_signal)) / 2
+        
+        # Find indices where signal exceeds threshold
+        above_threshold = np.where(phase_signal > threshold)[0]
+        
+        if len(above_threshold) > 0:
+            # Check for wrap around
+            diffs = np.diff(above_threshold)
+            if np.any(diffs > 1):
+                # Wrap around detected. The "start" is the first index after the gap.
+                gap_idx = np.where(diffs > 1)[0][0]
+                start_idx = above_threshold[gap_idx + 1]
+            else:
+                start_idx = above_threshold[0]
+            
+            phase = phase_bins[start_idx]
+        else:
+            # Fallback to peak method
+            peak_idx = np.argmax(phase_signal)
+            phase = (phase_bins[peak_idx] - pulse_width / 2) % rep_period
+            
         return phase
 
     # =========================================================
@@ -249,14 +249,22 @@ class TRASTAnalyzer:
         self,
         dataset_index,
         bin_width=0.01,
-        smooth_bins=5,
-        duty=0.1
+        smooth_bins=5
     ):
 
         photons = self.datasets[dataset_index]
         tau = self.pulse_widths[dataset_index]
         acquisition_time = (
             self.acquisition_times[dataset_index]
+        )
+        duty = self.duty_cycle[dataset_index]
+
+        # Find the actual phase to align the laser state
+        phase = self.find_pulse_phase(
+            photons,
+            tau,
+            acquisition_time,
+            duty
         )
 
         bins = np.arange(
@@ -279,8 +287,9 @@ class TRASTAnalyzer:
         times = edges[:-1]
         rep_period = tau / duty
 
+        # Laser state aligned with the recovered phase
         laser_state = (
-            (times % rep_period) < tau
+            ((times - phase) % rep_period) < tau
         ).astype(float)
 
         laser_state *= np.max(rates)
@@ -329,7 +338,11 @@ if __name__ == "__main__":
         # r'14 May 2026/TRAST Magnet 3.h5',
         # r'19 May 2026/TRAST FC 2.h5',
         # r'14 May 2026/TRAST AA 2.h5',
-        r'19 June 2026/TRAST long timescale F4.h5',
+        # r'19 June 2026/TRAST long timescale F4.h5',
+        # r'19 June 2026/TRAST long timescale F1.h5',
+        # r'19 June 2026/TRAST long timescale F2_reversed.h5',
+        r'19 June 2026/TRAST 2370 uW.h5',
+        r'19 June 2026/TRAST 3250uW.h5',
         # Add more files here
     ]
 
@@ -387,10 +400,20 @@ if __name__ == "__main__":
                 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1
             ])
             particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
-        else:
+        elif 'F2' in file_path:
             # Default or other pulse widths
             pulse_widths = np.array([
-                1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1,
+                20e-3, 40e-3, 100e-3, 200e-3, 400e-3, 1, 2
+            ])
+            particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
+        else:
+            # Default or other pulse widths
+            # pulse_widths = np.array([
+            #     1e-3, 2e-3, 4e-3, 10e-3, 20e-3, 40e-3, 100e-3, 200e-3, 400e-3, 1, 2,
+            # ])
+            pulse_widths = np.array([
+                100e-9, 200e-9, 500e-9, 1e-6, 2e-6, 5e-6, 10e-6, 20e-6, 50e-6, 100e-6, 200e-6,
+                500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1
             ])
             particle_nums = np.arange(1, len(pulse_widths) + 1, 1).astype(int)
         print(f"Particles to process: {particle_nums}")
@@ -410,12 +433,10 @@ if __name__ == "__main__":
             datasets.append(abstimes)
             acquisition_time = abstimes[-1]
             acquisition_times.append(acquisition_time)
-            if partnum < 23:
-                duty_cycles.append(0.2)
-            elif partnum == 23:
-                duty_cycles.append(0.2)
+            if partnum < 19:
+                duty_cycles.append(0.01)
             else:
-                duty_cycles.append(0.5)
+                duty_cycles.append(0.1)
 
         # Update pulse_widths if some particles were missing or specifically selected
         # The number of datasets collected must match the number of pulse widths used in analysis
@@ -447,40 +468,82 @@ if __name__ == "__main__":
         # Fit TRAST curve
         # ---------------------------------------------------------
 
-        def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl):
+        def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl, model_type='triplet_dark'):
             """
             TRAST model for triplet state + another reversible dark state + bleaching.
-            tau_T: Triplet lifetime
-            A: Triplet amplitude
+            tau_T: Triplet lifetime (or the only dark state if model_type is 'one_dark')
+            A: Triplet amplitude (or the only dark state amplitude)
             tau_D: Second dark state lifetime
             A_D: Second dark state amplitude
             tau_bl: Bleaching lifetime
             """
             triplet = A * (1 - (1 - np.exp(-tau / tau_T)) / (tau / tau_T))
-            dark_state2 = A_D * (1 - (1 - np.exp(-tau / tau_D)) / (tau / tau_D))
             bleaching = (1 - np.exp(-tau / tau_bl)) / (tau / tau_bl)
 
+            if model_type == 'one_dark':
+                return (1 - triplet) * bleaching
+            
+            dark_state2 = A_D * (1 - (1 - np.exp(-tau / tau_D)) / (tau / tau_D))
             return (1 - triplet - dark_state2) * bleaching
 
+        # Choose model: 'triplet_dark' or 'one_dark'
+        use_model = 'triplet_dark'
+
         try:
-            # Initial guesses: tau_T = 1ms, A = 0.2, tau_D = 10ms, A_D = 0.1, tau_bl = 100ms
-            p0 = [1e-3, 0.2, 10e-3, 0.1, 2]
-            bounds = ([1e-7, 0, 1e-6, 0, 1], [1e-1, 1, 1, 1, 100])
-            popt, pcov = curve_fit(trast_model, taus, trast, p0=p0, bounds=bounds)
+            if use_model == 'one_dark':
+                # Initial guesses: tau_D = 10ms, A_D = 0.2, tau_bl = 2s
+                p0 = [10e-3, 0.2, 2]
+                bounds = ([1e-6, 0, 1], [2, 1, 1000])
+                
+                # Wrapper to pass model_type to curve_fit if needed, 
+                # but curve_fit expects params as args.
+                popt, pcov = curve_fit(lambda t, tD, AD, tbl: trast_model(t, tD, AD, 0, 0, tbl, model_type='one_dark'), 
+                                       taus, trast, p0=p0, bounds=bounds)
+                
+                tau_D_fit, A_D_fit, tau_bl_fit = popt
+                perr = np.sqrt(np.diag(pcov))
 
-            tau_T_fit, A_fit, tau_D_fit, A_D_fit, tau_bl_fit = popt
-            perr = np.sqrt(np.diag(pcov))
+                # Calculate kinetic rates
+                k_on = A_D_fit / tau_D_fit
+                k_off = (1 - A_D_fit) / tau_D_fit
 
-            print(f"\nFit Results for {os.path.basename(file_path)}:")
-            print(f"Triplet lifetime (tau_T): {tau_T_fit * 1e6:.2f} ± {perr[0] * 1e6:.2f} µs")
-            print(f"Triplet Amplitude (A): {A_fit:.3f} ± {perr[1]:.3f}")
-            print(f"Dark State 2 lifetime (tau_D): {tau_D_fit * 1e3:.2f} ± {perr[2] * 1e3:.2f} ms")
-            print(f"Dark State 2 Amplitude (A_D): {A_D_fit:.3f} ± {perr[3]:.3f}")
-            print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2f} ± {perr[4] * 1e3:.2f} ms")
+                print(f"\nFit Results (One Dark State) for {os.path.basename(file_path)}:")
+                print(f"Dark State lifetime (tau_D): {tau_D_fit * 1e3:.2f} ± {perr[0] * 1e3:.2f} ms")
+                print(f"Dark State Amplitude (A_D): {A_D_fit:.3f} ± {perr[1]:.3f}")
+                print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2f} ± {perr[2] * 1e3:.2f} ms")
+                print(f"Kinetic rates: k_on = {k_on:.2f} s^-1, k_off = {k_off:.2f} s^-1")
+
+                fit_curve = lambda t, *p: trast_model(t, p[0], p[1], 0, 0, p[2], model_type='one_dark')
+            else:
+                # Initial guesses: tau_T = 1ms, A = 0.2, tau_D = 10ms, A_D = 0.1, tau_bl = 100ms
+                p0 = [1e-3, 0.2, 10e-3, 0.1, 2]
+                bounds = ([1e-7, 0, 1e-6, 0, 1], [1e-1, 1, 1, 1, 100])
+                popt, pcov = curve_fit(lambda t, tT, AT, tD, AD, tbl: trast_model(t, tT, AT, tD, AD, tbl, model_type='triplet_dark'), 
+                                       taus, trast, p0=p0, bounds=bounds)
+
+                tau_T_fit, A_fit, tau_D_fit, A_D_fit, tau_bl_fit = popt
+                perr = np.sqrt(np.diag(pcov))
+
+                # Calculate kinetic rates
+                k_ST = A_fit / tau_T_fit
+                k_TS = (1 - A_fit) / tau_T_fit
+                k_SD = A_D_fit / tau_D_fit
+                k_DS = (1 - A_D_fit) / tau_D_fit
+
+                print(f"\nFit Results (Triplet + Dark State) for {os.path.basename(file_path)}:")
+                print(f"Triplet lifetime (tau_T): {tau_T_fit * 1e6:.2f} ± {perr[0] * 1e6:.2f} µs")
+                print(f"Triplet Amplitude (A): {A_fit:.3f} ± {perr[1]:.3f}")
+                print(f"Dark State 2 lifetime (tau_D): {tau_D_fit * 1e3:.2f} ± {perr[2] * 1e3:.2f} ms")
+                print(f"Dark State 2 Amplitude (A_D): {A_D_fit:.3f} ± {perr[3]:.3f}")
+                print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2f} ± {perr[4] * 1e3:.2f} ms")
+                print(f"Triplet rates: k_ST = {k_ST:.2e} s^-1, k_TS = {k_TS:.2e} s^-1")
+                print(f"Dark state rates: k_SD = {k_SD:.2f} s^-1, k_DS = {k_DS:.2f} s^-1")
+                
+                fit_curve = lambda t, *p: trast_model(t, p[0], p[1], p[2], p[3], p[4], model_type='triplet_dark')
 
             # Plot fit
             tau_fine = np.logspace(np.log10(taus.min()), np.log10(taus.max()), 100)
-            plt.semilogx(tau_fine, trast_model(tau_fine, *popt), '-', color=color,
+            plt.semilogx(tau_fine, fit_curve(tau_fine, *popt), '-', color=color,
                          label=f'Fit {os.path.basename(file_path)}')
 
         except Exception as e:
@@ -492,7 +555,7 @@ if __name__ == "__main__":
     plt.ylabel("Normalized TRAST signal")
     plt.title("TRAST Curves Comparison")
     plt.grid(False)
-    plt.legend(loc='upper right')
+    plt.legend(loc='lower left')
     plt.tight_layout()
     plt.show()
 
@@ -501,7 +564,6 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
 
     analyzer.reconstruct_trace(
-         dataset_index=-1,
-         bin_width=0.05,
-         duty=0.2
+         dataset_index=-4,
+         bin_width=0.05
      )
