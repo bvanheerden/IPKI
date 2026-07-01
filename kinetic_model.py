@@ -12,14 +12,17 @@ def kinetic(t, y, k1, k2, k3, k4):
                   [0,  k2, 0, -k1-k3]])  # Unquenched
     return K @ y
 
-def modelfunc(t, k1, k2, k3, k4, q0, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None):
+def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None):
     """
     Model function for solving the kinetic equations across multiple light/dark phases.
     If k2_light is provided, it is used during light phases instead of k2.
     """
     kl1 = k2_light if k2_light is not None else k2
     
-    sol1 = solve_ivp(kinetic, [t[0], t[t_dark+1]], [0, 0, q0, 1-q0], t_eval=t[0:t_dark+1],
+    q0 = q_sum * q_fraction
+    q1 = q_sum * (1 - q_fraction)
+    
+    sol1 = solve_ivp(kinetic, [t[0], t[t_dark+1]], [0, 0, q0, q1], t_eval=t[0:t_dark+1],
                      args=[k1, kl1, k3, k4])
     sol2 = solve_ivp(kinetic, [t[t_dark], t[t_light+1]], sol1.y[:, -1], t_eval=t[t_dark:t_light+1],
                      args=[0, k2, 0, 0])

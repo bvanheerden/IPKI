@@ -20,10 +20,10 @@ datasets = {
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 0.5]
+default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
 
 # Global defaults; these can be overridden per-dataset by a params.json or params.txt
-default_startind = 2
+default_startind = 1
 default_onlen = 50
 default_offlen = 600
 
@@ -78,9 +78,9 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q0):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q0, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
+    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=None)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
 
@@ -90,38 +90,42 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         pcov = None
     else:
         # noinspection PyTupleAssignmentBalance
-        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0],
-                                                                       [10, 10, 10, 10, 10, 1]), verbose=2)
+        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0],
+                                                                       [10, 10, 10, 10, 10, 2, 1]), verbose=2)
 
     tau = [1 / popt[i] for i in range(5)]
-    q0 = popt[5]
+    q_sum = popt[5]
+    q_fraction = popt[6]
 
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
         perr = np.sqrt(np.diag(pcov))
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
-        q0_err = perr[5]
+        q_sum_err = perr[5]
+        q_fraction_err = perr[6]
     else:
         perr = [np.nan] * len(popt)
         tau_err = [np.nan] * 5
-        q0_err = np.nan
+        q_sum_err = np.nan
+        q_fraction_err = np.nan
 
-    print(f'Tau1 = {tau[0]:.2f} ± {tau_err[0]:.2f} s')
-    print(f'Tau2 = {tau[1]:.2f} ± {tau_err[1]:.2f} s')
-    print(f'Tau2_light = {tau[2]:.2f} ± {tau_err[2]:.2f} s')
-    print(f'Tau3 = {tau[3]:.2f} ± {tau_err[3]:.2f} s')
-    print(f'Tau4 = {tau[4]:.2f} ± {tau_err[4]:.2f} s')
-    print(f'Q0 = {q0:.2f} ± {q0_err:.2f} cps')
+    print(f'Tau1 = {tau[0]:.2g} ± {tau_err[0]:.2g} s')
+    print(f'Tau2 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
+    # print(f'Tau2_light = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
+    print(f'Tau3 = {tau[3]:.2g} ± {tau_err[3]:.2g} s')
+    print(f'Tau4 = {tau[4]:.2g} ± {tau_err[4]:.2g} s')
+    print(f'Q_sum = {q_sum:.2g} ± {q_sum_err:.2g} cps')
+    print(f'Q_fraction = {q_fraction:.2g} ± {q_fraction_err:.2g}')
 
     t_plot = t
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5])
+        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q0, q0_err, popt, perr, pcov
+    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov
 
 
 def analyze_covariance(pcov, param_names=None):
@@ -135,7 +139,7 @@ def analyze_covariance(pcov, param_names=None):
         corr_matrix: Correlation coefficient matrix
     """
     if param_names is None:
-        param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q0']
+        param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
 
     # Convert covariance to correlation matrix
     # corr[i,j] = cov[i,j] / (std[i] * std[j])
@@ -196,7 +200,7 @@ for display_name, folder_name in datasets.items():
     try:
         # call fittrace without passing the global default_partlist so that any per-dataset
         # 'partlist' in params.json / params.txt will be used automatically
-        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q0, q0_err, popt, perr, pcov = fittrace(folder_path)
+        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov = fittrace(folder_path)
 
         # Store data for plotting
         all_data[display_name] = {
@@ -214,19 +218,20 @@ for display_name, folder_name in datasets.items():
         def fmt_val_err(val, err):
             try:
                 if np.isfinite(err):
-                    return f"{val:.6g} ± {err:.2g}"
+                    return f"{val:.2g} ± {err:.2g}"
             except Exception:
                 pass
-            return f"{val:.6g}"
+            return f"{val:.2g}"
 
         results.append({
             'Dataset': display_name,
             'Tau1 (s)': fmt_val_err(tau_list[0], tau_err_list[0]),
             'Tau2 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
-            'Tau2_light (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
+            # 'Tau2_light (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
             'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
             'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
-            'Q0': fmt_val_err(q0, q0_err)
+            'Q_sum': fmt_val_err(q_sum, q_sum_err),
+            'Q_fraction': fmt_val_err(q_fraction, q_fraction_err)
         })
 
         print(f"✓ Successfully processed {display_name}")
@@ -241,6 +246,18 @@ print("=" * 80)
 if results:
     df = pd.DataFrame(results)
     print(df.to_string(index=False))
+
+    # Table for Notion
+    print("\n" + "=" * 60)
+    print("RESULTS SUMMARY TABLE (Markdown/Notion)")
+    print("=" * 60)
+    header = "| " + " | ".join(df.columns) + " |"
+    sep = "| " + " | ".join(["---"] * len(df.columns)) + " |"
+    print(header)
+    print(sep)
+    for _, row in df.iterrows():
+        print("| " + " | ".join([str(val) for val in row]) + " |")
+    print("=" * 60)
 
     # Save results to CSV
     output_file = os.path.join(base_dir, 'fitted_parameters.csv')
@@ -323,7 +340,7 @@ print("\n" + "=" * 80)
 print("Covariance Matrix Analysis - Parameter Correlations")
 print("=" * 80)
 
-param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q0']
+param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
 
 all_corr_matrices = {}
 

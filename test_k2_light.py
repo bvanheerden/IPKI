@@ -14,7 +14,7 @@ dataset_name = 'LHCII Control'
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-default_p0 = [1 / 4, 1 / 6, 1/ 6, 1 / 10, 1 / 3, 0.5]
+default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
 
 startind = 1
 
@@ -69,8 +69,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q0):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q0, t_dark,
+    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
@@ -80,38 +80,42 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
         popt = p0
         pcov = None
     else:
-        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0],
-                                                                       [10, 10, 10, 10, 10, 1]), verbose=2)
+        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0],
+                                                                       [10, 10, 10, 10, 10, 2, 1]), verbose=2)
 
     tau = [1 / popt[i] for i in range(5)]
-    q0 = popt[5]
+    q_sum = popt[5]
+    q_fraction = popt[6]
 
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
         perr = np.sqrt(np.diag(pcov))
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
-        q0_err = perr[5]
+        q_sum_err = perr[5]
+        q_fraction_err = perr[6]
     else:
         perr = [np.nan] * len(popt)
         tau_err = [np.nan] * 5
-        q0_err = np.nan
+        q_sum_err = np.nan
+        q_fraction_err = np.nan
 
     print(f'Tau1 = {tau[0]:.2f} ± {tau_err[0]:.2f} s')
     print(f'Tau2 = {tau[1]:.2f} ± {tau_err[1]:.2f} s')
     print(f'Tau2_light = {tau[2]:.2f} ± {tau_err[2]:.2f} s')
     print(f'Tau3 = {tau[3]:.2f} ± {tau_err[3]:.2f} s')
     print(f'Tau4 = {tau[4]:.2f} ± {tau_err[4]:.2f} s')
-    print(f'Q0 = {q0:.2f} ± {q0_err:.2f} cps')
+    print(f'Q_sum = {q_sum:.2f} ± {q_sum_err:.2f} cps')
+    print(f'Q_fraction = {q_fraction:.2f} ± {q_fraction_err:.2f}')
 
     t_plot = t
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5])
+        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q0, q0_err, popt, perr
+    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr
 
 
 # Process GCO dataset
@@ -133,7 +137,7 @@ if not h5_files:
     exit(1)
 
 try:
-    norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q0, q0_err, popt, perr = fittrace(folder_path)
+    norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr = fittrace(folder_path)
 
     print(f"\n✓ Successfully processed {dataset_name}")
 

@@ -1,3 +1,4 @@
+import re
 import numpy as np
 import h5py
 import os
@@ -7,13 +8,13 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import kinetic_model
 
-# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
 
 # Default parameters (used if no config file is found)
 default_params = {
     'partlist': [0, 1, 2],
-    'p0': [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 0.5],
+    'p0': [1 / 20, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5],
     'onlen': 50,
     'offlen': 200,
     'startind': 6,
@@ -62,8 +63,8 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q0):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2_fixed, k3, k4, 0.207, t_dark,
+    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2_fixed, k3, k4, q_sum, 0.23, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
@@ -71,37 +72,44 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
 
     if onlyplot:
         popt = p0
+        pcov = None
     else:
-        popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0],
-                                       [10, 10, 10, 10, 10, 1]), verbose=2)
+        popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0.95, 0],
+                                       [1, 10, 10, 1, 10, 1.05, 1]), verbose=2, max_nfev=100)
 
-    k1 = popt[0]
-    k2 = popt[1]
-    k2_light = popt[2]
-    k3 = popt[3]
-    k4 = popt[4]
-    q0 = popt[5]
+    k_list = popt
+    tau_list = [1 / k if k != 0 else np.nan for k in k_list[:5]]
+    q_sum = popt[5]
+    q_fraction = popt[6]
 
-    tau1 = 1 / k1
-    tau2 = 1 / k2
-    tau2_light = 1 / k2_light
-    tau3 = 1 / k3
-    tau4 = 1 / k4
+    # Calculate errors
+    if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
+        perr = np.sqrt(np.diag(pcov))
+        # Error for tau = 1/k: sigma_tau = sigma_k / k^2
+        tau_err_list = [perr[i] / (k_list[i]**2) if k_list[i] != 0 else np.nan for i in range(5)]
+        q_sum_err = perr[5]
+        q_fraction_err = perr[6]
+    else:
+        perr = [np.nan] * 7
+        tau_err_list = [np.nan] * 5
+        q_sum_err = np.nan
+        q_fraction_err = np.nan
 
-    print(f'K1 = {k1:.4f} s⁻¹, Tau1 = {tau1:.2f} s')
-    print(f'K2 = {k2:.4f} s⁻¹, Tau2 = {tau2:.2f} s')
-    print(f'K2_light = {k2_light:.4f} s⁻¹, Tau2_light = {tau2_light:.2f} s')
-    print(f'K3 = {k3:.4f} s⁻¹, Tau3 = {tau3:.2f} s')
-    print(f'K4 = {k4:.4f} s⁻¹, Tau4 = {tau4:.2f} s')
-    print(f'Q0 = {q0:.2f} cps')
+    print(f'K1 = {k_list[0]:.2g} ± {perr[0]:.2g} s⁻¹, Tau1 = {tau_list[0]:.2g} ± {tau_err_list[0]:.2g} s')
+    print(f'K2 = {k_list[1]:.2g} ± {perr[1]:.2g} s⁻¹, Tau2 = {tau_list[1]:.2g} ± {tau_err_list[1]:.2g} s')
+    # print(f'K2_light = {k_list[2]:.2g} ± {perr[2]:.2g} s⁻¹, Tau2_light = {tau_list[2]:.2g} ± {tau_err_list[2]:.2g} s')
+    print(f'K3 = {k_list[3]:.2g} ± {perr[3]:.2g} s⁻¹, Tau3 = {tau_list[3]:.2g} ± {tau_err_list[3]:.2g} s')
+    print(f'K4 = {k_list[4]:.2g} ± {perr[4]:.2g} s⁻¹, Tau4 = {tau_list[4]:.2g} ± {tau_err_list[4]:.2g} s')
+    print(f'Q_sum = {q_sum:.2g} ± {q_sum_err:.2g} cps')
+    print(f'Q_fraction = {q_fraction:.2g} ± {q_fraction_err:.2g}')
 
     t_plot = t
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, k1, k2, k2_light, k3, k4, q0)
+        model = fitfunc(t_plot, *k_list)
 
-    return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau2_light, tau3, tau4, q0, k1, k2, k2_light, k3, k4
+    return (norm_pulsephotons, model, t_plot[:-1], tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, k_list, perr)
 
 
 # Loop through all power folders and collect results
@@ -141,45 +149,65 @@ for folder_name in all_folders:
 
     # Extract power and AA info from folder name
     has_aa = folder_name.endswith('AA')
-    power_str = folder_name.replace(' AA', '').strip()
+    
+    # Extract only the numeric part for power
+    power_match = re.search(r"(\d+(\.\d+)?)", folder_name)
+    if power_match:
+        power_val = float(power_match.group(1))
+        power_str = power_match.group(1) # For display in title
+    else:
+        power_val = 0.0
+        power_str = "0"
+        print(f"  Warning: Could not extract numeric power from {folder_name}")
 
-    print(f"  Power: {power_str}, AA: {has_aa}")
+    print(f"  Power: {power_val}, AA: {has_aa}")
 
     if has_aa:
-        # k2_fixed = 1.5  # LHCII
-        k2_fixed = 2.14  # Thylakoid
+        k2_fixed = 2.75
+        # k2_fixed = 2.4  # Thylakoid
     else:
-        # k2_fixed = 0.145  # LHCII
-        k2_fixed = 0.468  # Thylakoid
+        k2_fixed = 0.359  # LHCII
+        # k2_fixed = .25  # Thylakoid
 
     try:
         # Fit the trace and store result tuple
+        # result = (norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, k_list, perr)
         result = fittrace(folder_path, partlist, onlen, offlen, startind, p0, low_value_threshold, k2_fixed)
-        # result = (norm_pulsephotons, model, t_plot, tau1, tau2, tau2_light, tau3, tau4, q0, k1, k2, k2_light, k3, k4)
+        
+        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, k_list, perr = result
+
+        def fmt_val_err(val, err):
+            try:
+                if np.isfinite(err):
+                    return f"{val:.2g} ± {err:.2g}"
+            except Exception:
+                pass
+            return f"{val:.2g}"
 
         # Store results
         results.append({
-            'Power': power_str,
+            'Power (mE)': power_val,
             'AA': 'Yes' if has_aa else 'No',
-            'K1 (s⁻¹)': result[9],   # k1
-            'K2 (s⁻¹)': result[10],   # k2
-            'K2_light (s⁻¹)': result[11], # k2_light
-            'K3 (s⁻¹)': result[12],  # k3
-            'K4 (s⁻¹)': result[13],  # k4
-            'Tau1 (s)': result[3],   # tau1
-            'Tau2 (s)': result[4],   # tau2
-            'Tau2_light (s)': result[5], # tau2_light
-            'Tau3 (s)': result[6],   # tau3
-            'Tau4 (s)': result[7],   # tau4
-            'Q0': result[8]          # q0
+            'K1 (s⁻¹)': fmt_val_err(k_list[0], perr[0]),
+            'K2 (s⁻¹)': fmt_val_err(k_list[1], perr[1]),
+            # 'K2_light (s⁻¹)': fmt_val_err(k_list[2], perr[2]),
+            'K3 (s⁻¹)': fmt_val_err(k_list[3], perr[3]),
+            'K4 (s⁻¹)': fmt_val_err(k_list[4], perr[4]),
+            'Tau1 (s)': fmt_val_err(tau_list[0], tau_err_list[0]),
+            'Tau2 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
+            # 'Tau2_light (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
+            'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
+            'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
+            'Q_sum': fmt_val_err(q_sum, q_sum_err),
+            'Q_fraction': fmt_val_err(q_fraction, q_fraction_err)
         })
 
         # Create and save individual trace plot
         fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(result[2], result[0], 'o-', color='gray', label='Experimental data',
+        ax.plot(t_plot, norm_pulsephotons, 'o-', color='gray', label='Experimental data',
                 markersize=4, linewidth=1.5, alpha=0.7)
-        if result[1] is not None:
-            ax.plot(result[2], result[1], '-', color='red', label='Model fit', linewidth=2)
+        if model is not None:
+            ax.plot(t_plot, model, '-', color='red', label='Model fit', linewidth=2)
         ax.set_xlabel('Time (s)', fontsize=12)
         ax.set_ylabel('Normalized photon count', fontsize=12)
         aa_label = " (with AA)" if has_aa else ""
@@ -208,7 +236,55 @@ print("=" * 80)
 
 if results:
     df = pd.DataFrame(results)
+    df = df.sort_values('Power (mE)').reset_index(drop=True)
     print(df.to_string(index=False))
+
+    # Table for Notion
+    print("\n" + "=" * 60)
+    print("RESULTS SUMMARY TABLE (Markdown/Notion)")
+    print("=" * 60)
+
+    # Helper to get numeric values and errors from the formatted strings
+    def get_numeric(series):
+        return series.str.split(' ±').str[0].astype(float)
+
+    def get_error(series):
+        # Extract the error part, handle cases where no error is present
+        parts = series.str.split(' ±')
+        return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
+
+    # Calculate means for numeric columns
+    mean_row = []
+    for col in df.columns:
+        if col in ['Power (mE)', 'AA']:
+            if col == 'Power (mE)':
+                mean_row.append('**AVERAGE**')
+            else:
+                mean_row.append('')
+        else:
+            try:
+                mean_val = get_numeric(df[col]).mean()
+                mean_row.append(f"**{mean_val:.2g}**")
+            except Exception:
+                mean_row.append('')
+
+    # Calculate means for per-dataset q_sum if needed
+    q_sum_no_aa = df[df['AA'] == 'No']['Q_sum'] if not df[df['AA'] == 'No'].empty else pd.Series()
+    q_sum_with_aa = df[df['AA'] == 'Yes']['Q_sum'] if not df[df['AA'] == 'Yes'].empty else pd.Series()
+
+    header = "| " + " | ".join(df.columns) + " |"
+    sep = "| " + " | ".join(["---"] * len(df.columns)) + " |"
+    print(header)
+    print(sep)
+    for _, row in df.iterrows():
+        print("| " + " | ".join([str(val) for val in row]) + " |")
+    print("| " + " | ".join(mean_row) + " |")
+    print("=" * 60)
+
+    if not q_sum_no_aa.empty:
+        print(f"Average Q_sum (no AA): {get_numeric(q_sum_no_aa).mean():.2g}")
+    if not q_sum_with_aa.empty:
+        print(f"Average Q_sum (with AA): {get_numeric(q_sum_with_aa).mean():.2g}")
 
     # Save results to CSV
     output_file = os.path.join(base_data_dir, 'analysis_results.csv')
@@ -220,54 +296,68 @@ if results:
     print("Creating k values vs power plot...")
     print("=" * 80)
 
-    print('Average Q0 = ', df['Q0'].mean())
-
-    # Extract power values and convert to numeric (removing 'mE')
-    df['Power_numeric'] = df['Power'].str.replace(' mE', '').astype(float)
+    print('Average Q_sum = ', get_numeric(df['Q_sum']).mean())
 
     # Separate data with and without AA
-    df_no_aa = df[df['AA'] == 'No'].sort_values('Power_numeric')
-    df_with_aa = df[df['AA'] == 'Yes'].sort_values('Power_numeric')
+    # Use numeric dataframes for plotting but handle cases where AA is missing
+    df_no_aa = df[df['AA'] == 'No'].copy()
+    df_with_aa = df[df['AA'] == 'Yes'].copy()
 
-    # Create figure with k values
-    fig, ax = plt.subplots(figsize=(12, 7))
+    if not df_no_aa.empty:
+        df_no_aa = df_no_aa.sort_values('Power (mE)')
+    if not df_with_aa.empty:
+        df_with_aa = df_with_aa.sort_values('Power (mE)')
 
-    # Create secondary y-axis for k4
-    ax2 = ax.twinx()
+    # Create figure with 3 subplots for k1, k3, k4
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(8, 12), sharex=True)
 
-    # Plot k values without AA on primary axis
-    if len(df_no_aa) > 0:
-        ax.plot(df_no_aa['Power_numeric'], df_no_aa['K1 (s⁻¹)'], 'o-', label='K1 (no AA)',
-                linewidth=2, markersize=8, color='C0')
-        ax.plot(df_no_aa['Power_numeric'], df_no_aa['K3 (s⁻¹)'], '^-', label='K3 (no AA)',
-                linewidth=2, markersize=8, color='C1')
-        ax2.plot(df_no_aa['Power_numeric'], df_no_aa['K4 (s⁻¹)'], 'v-', label='K4 (no AA)',
-                 linewidth=2, markersize=8, color='C2')
+    # Plot K1
+    if not df_no_aa.empty:
+        ax1.errorbar(df_no_aa['Power (mE)'], get_numeric(df_no_aa['K1 (s⁻¹)']),
+                    yerr=get_error(df_no_aa['K1 (s⁻¹)']), fmt='o-', label='K1 (no AA)',
+                    linewidth=2, markersize=8, color='C0', capsize=5)
+    if not df_with_aa.empty:
+        ax1.errorbar(df_with_aa['Power (mE)'], get_numeric(df_with_aa['K1 (s⁻¹)']),
+                    yerr=get_error(df_with_aa['K1 (s⁻¹)']), fmt='o--', label='K1 (with AA)',
+                    linewidth=2, markersize=8, alpha=0.7, color='C3', capsize=5)
+    ax1.set_ylabel('K1 (s⁻¹)', fontsize=12)
+    ax1.set_title('K1 vs Laser Power', fontsize=13, fontweight='bold')
+    ax1.legend(fontsize=10, loc='best')
+    ax1.grid(True, alpha=0.3)
 
-    # Plot k values with AA (dashed lines) on primary axis
-    if len(df_with_aa) > 0:
-        ax.plot(df_with_aa['Power_numeric'], df_with_aa['K1 (s⁻¹)'], 'o--', label='K1 (with AA)',
-                linewidth=2, markersize=8, alpha=0.7, color='C3')
-        ax.plot(df_with_aa['Power_numeric'], df_with_aa['K3 (s⁻¹)'], '^--', label='K3 (with AA)',
-                linewidth=2, markersize=8, alpha=0.7, color='C4')
-        ax2.plot(df_with_aa['Power_numeric'], df_with_aa['K4 (s⁻¹)'], 'v--', label='K4 (with AA)',
-                 linewidth=2, markersize=8, alpha=0.7, color='C5')
+    # Plot K3
+    if not df_no_aa.empty:
+        ax2.errorbar(df_no_aa['Power (mE)'], get_numeric(df_no_aa['K3 (s⁻¹)']),
+                    yerr=get_error(df_no_aa['K3 (s⁻¹)']), fmt='^-', label='K3 (no AA)',
+                    linewidth=2, markersize=8, color='C1', capsize=5)
+    if not df_with_aa.empty:
+        ax2.errorbar(df_with_aa['Power (mE)'], get_numeric(df_with_aa['K3 (s⁻¹)']),
+                    yerr=get_error(df_with_aa['K3 (s⁻¹)']), fmt='^--', label='K3 (with AA)',
+                    linewidth=2, markersize=8, alpha=0.7, color='C4', capsize=5)
+    ax2.set_ylabel('K3 (s⁻¹)', fontsize=12)
+    ax2.set_title('K3 vs Laser Power', fontsize=13, fontweight='bold')
+    ax2.legend(fontsize=10, loc='best')
+    ax2.grid(True, alpha=0.3)
 
-    ax.set_xlabel('Power (mE)', fontsize=12)
-    ax.set_ylabel('K1, K3 values (s⁻¹)', fontsize=12)
-    ax2.set_ylabel('K4 value (s⁻¹)', fontsize=12)
-    ax.set_title('Rate Constants vs Laser Power', fontsize=14, fontweight='bold')
+    # Plot K4
+    if not df_no_aa.empty:
+        ax3.errorbar(df_no_aa['Power (mE)'], get_numeric(df_no_aa['K4 (s⁻¹)']),
+                    yerr=get_error(df_no_aa['K4 (s⁻¹)']), fmt='v-', label='K4 (no AA)',
+                    linewidth=2, markersize=8, color='C2', capsize=5)
+    if not df_with_aa.empty:
+        ax3.errorbar(df_with_aa['Power (mE)'], get_numeric(df_with_aa['K4 (s⁻¹)']),
+                    yerr=get_error(df_with_aa['K4 (s⁻¹)']), fmt='v--', label='K4 (with AA)',
+                    linewidth=2, markersize=8, alpha=0.7, color='C5', capsize=5)
+    ax3.set_ylabel('K4 (s⁻¹)', fontsize=12)
+    ax3.set_xlabel('Power (mE)', fontsize=12)
+    ax3.set_title('K4 vs Laser Power', fontsize=13, fontweight='bold')
+    ax3.legend(fontsize=10, loc='best')
+    ax3.grid(True, alpha=0.3)
 
-    # Combine legends from both axes
-    lines1, labels1 = ax.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax.legend(lines1 + lines2, labels1 + labels2, fontsize=10, loc='best')
-
-    ax.grid(True, alpha=0.3)
     plt.tight_layout()
 
     # Save plot
-    plot_file = os.path.join(base_data_dir, 'k_values_vs_power.png')
+    plot_file = os.path.join(base_data_dir, 'k_values_vs_power_split.png')
     plt.savefig(plot_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to: {plot_file}")
     plt.show()
