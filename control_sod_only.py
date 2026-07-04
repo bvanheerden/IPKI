@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import os
 from scipy.optimize import curve_fit
 import pandas as pd
-import seaborn as sns
+# import seaborn as sns
 import kinetic_model
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
@@ -12,9 +12,6 @@ base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2
 # Datasets to process (map display names to folder names)
 datasets = {
     'LHCII Control': 'LHCII Control 301 mE',
-    'LHCII GCO Control': 'LHCII GCO Control',
-    'LHCII Magnet': 'LHCII Magnet',
-    'LHCII MV': 'LHCII MV',
     'LHCII SOD': 'LHCII SOD',
 }
 
@@ -79,7 +76,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
 
 
     def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.50, k3, k4, 1, 0.23, t_dark,
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.54, k3, k4, 1, 0.23, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3, k2_light=None)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
@@ -124,8 +121,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     else:
         model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
-    # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov
+    # Return normalized data, model, time base, taus, errors, etc., AND timing parameters
+    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov, (t_dark, t_light, t_dark2, t_light2, t_dark3)
 
 
 def analyze_covariance(pcov, param_names=None):
@@ -175,7 +172,7 @@ def analyze_covariance(pcov, param_names=None):
 
 # Process all datasets
 print("=" * 80)
-print("Processing all datasets...")
+print("Processing Control and SOD datasets...")
 print("=" * 80)
 
 results = []
@@ -200,7 +197,7 @@ for display_name, folder_name in datasets.items():
     try:
         # call fittrace without passing the global default_partlist so that any per-dataset
         # 'partlist' in params.json / params.txt will be used automatically
-        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov = fittrace(folder_path)
+        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov, t_params = fittrace(folder_path)
 
         # Store data for plotting
         all_data[display_name] = {
@@ -209,6 +206,7 @@ for display_name, folder_name in datasets.items():
             'time': t_plot,
             'popt': popt,
             'perr': perr,
+            't_params': t_params
         }
 
         # Store covariance matrix for correlation analysis
@@ -247,155 +245,109 @@ if results:
     df = pd.DataFrame(results)
     print(df.to_string(index=False))
 
-    # Table for Notion
-    print("\n" + "=" * 60)
-    print("RESULTS SUMMARY TABLE (Markdown/Notion)")
-    print("=" * 60)
-    header = "| " + " | ".join(df.columns) + " |"
-    sep = "| " + " | ".join(["---"] * len(df.columns)) + " |"
-    print(header)
-    print(sep)
-    for _, row in df.iterrows():
-        print("| " + " | ".join([str(val) for val in row]) + " |")
-    print("=" * 60)
-
     # Save results to CSV
-    output_file = os.path.join(base_dir, 'fitted_parameters.csv')
+    output_file = os.path.join(base_dir, 'fitted_parameters_control_sod.csv')
     df.to_csv(output_file, index=False)
     print(f"\nResults saved to: {output_file}")
 
-# Create separate plots
+# Create plot
 print("\n" + "=" * 80)
-print("Creating plots...")
+print("Creating plot...")
 print("=" * 80)
 
-# Plot 1: Control and Magnet
-print("\nCreating Plot 1: Control and Magnet...")
-fig1, ax1 = plt.subplots(figsize=(14, 8))
+fig, ax = plt.subplots(figsize=(14, 8))
 
-control_magnet_datasets = ['LHCII Control', 'LHCII Magnet']
-colors_cm = {'LHCII Control': 'C0', 'LHCII Magnet': 'C1'}
+plot_datasets = ['LHCII Control', 'LHCII SOD']
+colors = {'LHCII Control': 'C0', 'LHCII SOD': 'C3'}
 
-for display_name in control_magnet_datasets:
+for display_name in plot_datasets:
     if display_name in all_data:
         data = all_data[display_name]
-        color = colors_cm[display_name]
+        color = colors[display_name]
         # Plot experimental data
-        ax1.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
+        ax.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
                 markersize=3, linewidth=1.5, alpha=0.2)
         # Plot model fit
         if data['model'] is not None:
-            ax1.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
+            ax.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
                     linewidth=2.5, alpha=0.9)
 
-ax1.set_xlabel('Time (s)', fontsize=12)
-ax1.set_ylabel('Normalized photon count', fontsize=12)
-ax1.set_title('Control and Magnet Comparison', fontsize=14, fontweight='bold')
-ax1.legend(fontsize=10, loc='best')
-ax1.grid(True, alpha=0.3)
+ax.set_xlabel('Time (s)', fontsize=12)
+ax.set_ylabel('Normalized photon count', fontsize=12)
+ax.set_title('Control and SOD Comparison', fontsize=14, fontweight='bold')
+ax.legend(fontsize=10, loc='best')
+ax.grid(True, alpha=0.3)
 plt.tight_layout()
+# plt.show()
 
-# Save plot 1
-plot_file1 = os.path.join(base_dir, 'control_magnet_comparison.png')
-plt.savefig(plot_file1, dpi=300, bbox_inches='tight')
-print(f"Plot 1 saved to: {plot_file1}")
-plt.close(fig1)
+# Save plot
+plot_file = os.path.join(base_dir, 'control_sod_comparison.png')
+plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+print(f"Plot saved to: {plot_file}")
+plt.close(fig)
 
-# Plot 2: Control with GCO Control, MV, and SOD
-print("\nCreating Plot 2: Control with Treatment Datasets...")
-fig2, ax2 = plt.subplots(figsize=(14, 8))
-
-control_treatment_datasets = ['LHCII Control', 'LHCII GCO Control', 'LHCII MV', 'LHCII SOD']
-colors_ct = {'LHCII Control': 'C0', 'LHCII GCO Control': 'C1', 'LHCII MV': 'C2', 'LHCII SOD': 'C3'}
-
-for display_name in control_treatment_datasets:
-    if display_name in all_data:
-        data = all_data[display_name]
-        # if display_name == 'LHCII GCO Control':
-        #     data['model'] = None
-        color = colors_ct[display_name]
-        # Plot experimental data
-        ax2.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
-                markersize=3, linewidth=1.5, alpha=0.2)
-        # Plot model fit
-        if data['model'] is not None:
-            ax2.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
-                    linewidth=2.5, alpha=0.9)
-
-ax2.set_xlabel('Time (s)', fontsize=12)
-ax2.set_ylabel('Normalized photon count', fontsize=12)
-ax2.set_title('Control and Treatment Comparison', fontsize=14, fontweight='bold')
-ax2.legend(fontsize=9, loc='best', ncol=2)
-ax2.grid(True, alpha=0.3)
-plt.tight_layout()
-
-# Save plot 2
-plot_file2 = os.path.join(base_dir, 'control_treatment_comparison.png')
-plt.savefig(plot_file2, dpi=300, bbox_inches='tight')
-print(f"Plot 2 saved to: {plot_file2}")
-plt.close(fig2)
-
-# Analyze covariance matrices for all datasets
+# Create population plots
 print("\n" + "=" * 80)
-print("Covariance Matrix Analysis - Parameter Correlations")
+print("Creating population plot...")
+print("=" * 80)
+
+fig, axes = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
+plot_datasets = ['LHCII Control', 'LHCII SOD']
+state_names = ['Bleached (State 0)', 'Quenched (State 1)', 'Unquenched 2 (State 2)', 'Unquenched (State 3)']
+
+for i, display_name in enumerate(plot_datasets):
+    if display_name in all_data:
+        ax = axes[i]
+        data = all_data[display_name]
+        popt = data['popt']
+        t = np.append(data['time'], data['time'][-1] + (data['time'][1] - data['time'][0]))
+        t_dark, t_light, t_dark2, t_light2, t_dark3 = data['t_params']
+        
+        # Recalculate model populations
+        sols = kinetic_model.modelfunc(t, popt[0], 0.50, popt[3], popt[4], 1, 0.23,
+                                      t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None)
+        
+        # Combine population trajectories
+        pop_trajectories = [[] for _ in range(4)]
+        for s_idx, sol in enumerate(sols):
+            # sol.y has shape (4, points)
+            for state_idx in range(4):
+                y_vals = sol.y[state_idx]
+                if s_idx > 0:
+                    y_vals = y_vals[1:]
+                pop_trajectories[state_idx].extend(y_vals)
+        
+        # Plot each population
+        for state_idx in range(4):
+            ax.plot(data['time'], pop_trajectories[state_idx], label=state_names[state_idx], linewidth=2)
+            
+        ax.set_ylabel('Population', fontsize=12)
+        ax.set_title(f'Model Populations: {display_name}', fontsize=14, fontweight='bold')
+        ax.legend(fontsize=10, loc='best')
+        ax.grid(True, alpha=0.3)
+
+axes[-1].set_xlabel('Time (s)', fontsize=12)
+plt.tight_layout()
+# plt.show()
+
+# Save population plot
+pop_plot_file = os.path.join(base_dir, 'control_sod_populations.png')
+plt.savefig(pop_plot_file, dpi=300, bbox_inches='tight')
+print(f"Population plot saved to: {pop_plot_file}")
+plt.close(fig)
+
+# Analyze covariance matrices
+print("\n" + "=" * 80)
+print("Covariance Matrix Analysis")
 print("=" * 80)
 
 param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
 
-all_corr_matrices = {}
-
 for display_name, pcov in covariance_data.items():
     if pcov is not None and np.all(np.isfinite(pcov)):
         print(f"\n{display_name}:")
-        corr_matrix = analyze_covariance(pcov, param_names)
-        all_corr_matrices[display_name] = corr_matrix
+        analyze_covariance(pcov, param_names)
     else:
         print(f"\n{display_name}: No valid covariance data available")
 
-# Create heatmaps of correlation matrices
-print("\n" + "=" * 80)
-print("Creating correlation heatmaps...")
-print("=" * 80)
-
-# Create subplots for each dataset's correlation matrix
-n_datasets = len(all_corr_matrices)
-n_cols = min(3, n_datasets)  # max 3 columns
-n_rows = (n_datasets + n_cols - 1) // n_cols
-
-if n_datasets > 0:
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
-    if n_rows == 1 and n_cols == 1:
-        axes = np.array([[axes]])
-    elif n_rows == 1 or n_cols == 1:
-        axes = axes.reshape(n_rows, n_cols)
-
-    axes = axes.flatten()  # flatten for easier iteration
-
-    for idx, (display_name, corr_matrix) in enumerate(all_corr_matrices.items()):
-        ax = axes[idx]
-
-        # Create heatmap
-        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0,
-                   vmin=-1, vmax=1, square=True, ax=ax, cbar_kws={'label': 'Correlation'},
-                   xticklabels=param_names, yticklabels=param_names,
-                   linewidths=0.5, linecolor='gray')
-        ax.set_title(f'{display_name}', fontsize=12, fontweight='bold')
-
-    # Hide unused subplots
-    for idx in range(n_datasets, len(axes)):
-        axes[idx].set_visible(False)
-
-    plt.tight_layout()
-
-    # Save the figure
-    corr_plot_file = os.path.join(base_dir, 'correlation_matrices.png')
-    plt.savefig(corr_plot_file, dpi=300, bbox_inches='tight')
-    print(f"Correlation heatmaps saved to: {corr_plot_file}")
-    plt.close(fig)
-
-print("\nCovariance analysis complete!")
-
-
-
-
-
+print("\nAnalysis complete!")

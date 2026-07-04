@@ -6,16 +6,19 @@ from scipy.optimize import curve_fit
 import kinetic_model
 
 # Select one dataset
-base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-folder_name = '741 mE'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
+base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
+# folder_name = '741 mE'
+# folder_name = 'LHCII SOD'
+folder_name = 'LHCII Control 301 mE'
 data_dir = os.path.join(base_data_dir, folder_name)
 
 # Default parameters (from Power_studies_June2026.py)
 default_params = {
-    'partlist': [0, 1, 2],
+    'partlist': [0, 1, 2, 3, 4, 5, 6, 7],
     'onlen': 50,
-    'offlen': 200,
-    'startind': 6,
+    'offlen': 600,
+    'startind': 0,
     'low_value_threshold': 0.1
 }
 
@@ -46,6 +49,11 @@ norm_pulsephotons = norm_pulsephotons[startind:]
 # Length of dark phase is offlen.
 t_dark_start = onlen
 t_dark_end = onlen + offlen
+    
+# Check if we have enough data
+if t_dark_end > len(norm_pulsephotons):
+    print(f"Warning: Trace is shorter ({len(norm_pulsephotons)}) than expected end of dark phase ({t_dark_end}).")
+    t_dark_end = len(norm_pulsephotons)
 
 # Extract the dark part
 dark_part = norm_pulsephotons[t_dark_start:t_dark_end]
@@ -84,16 +92,73 @@ try:
     print(f"Component 2: k2 = {k2:.4f} ± {k2_err:.4f} s⁻¹, Tau2 = {1/k2:.4f} s, A2 = {A2:.4f}")
     print(f"Offset (C) = {C:.4f} ± {C_err:.4f}")
 
-    # Average k2 calculations
-    # Amplitude-weighted: <k> = (A1*k1 + A2*k2) / (A1 + A2)
+    # Average lifetime and k calculations
+    # Standard definitions for bi-exponential decay: f(t) = sum A_i exp(-t/tau_i)
+    tau1 = 1/k1
+    tau2 = 1/k2
+    
+    # 1. Amplitude-weighted average lifetime: <tau>_amp = (A1*tau1 + A2*tau2) / (A1 + A2)
+    tau_amp_weighted = (A1 * tau1 + A2 * tau2) / (A1 + A2)
+    
+    # 2. Intensity-weighted (Area-weighted) average lifetime: <tau>_int = (A1*tau1^2 + A2*tau2^2) / (A1*tau1 + A2*tau2)
+    # This is often what is meant by "average lifetime" in fluorescence spectroscopy
+    tau_int_weighted = (A1 * tau1**2 + A2 * tau2**2) / (A1 * tau1 + A2 * tau2)
+
+    # Error propagation using the Delta Method: sigma_f^2 = J * V * J^T
+    # where J is the Jacobian (gradient) of the function f with respect to parameters
+    # and V is the covariance matrix.
+    
+    # Params: [A1, k1, A2, k2, C]
+    
+    def get_tau_amp(p):
+        a1, k1_, a2, k2_, c = p
+        return (a1/k1_ + a2/k2_) / (a1 + a2)
+        
+    def get_tau_int(p):
+        a1, k1_, a2, k2_, c = p
+        return (a1/k1_**2 + a2/k2_**2) / (a1/k1_ + a2/k2_)
+
+    def get_k_amp(p):
+        a1, k1_, a2, k2_, c = p
+        return (a1*k1_ + a2*k2_) / (a1 + a2)
+
+    def get_k_int(p):
+        a1, k1_, a2, k2_, c = p
+        return (a1 + a2) / (a1/k1_ + a2/k2_)
+
+    def get_gradient(func, p, eps=1e-6):
+        grad = np.zeros_like(p)
+        for i in range(len(p)):
+            p_plus = p.copy()
+            p_plus[i] += eps
+            p_minus = p.copy()
+            p_minus[i] -= eps
+            grad[i] = (func(p_plus) - func(p_minus)) / (2 * eps)
+        return grad
+
+    grad_amp = get_gradient(get_tau_amp, popt)
+    tau_amp_err = np.sqrt(grad_amp @ pcov @ grad_amp)
+    
+    grad_int = get_gradient(get_tau_int, popt)
+    tau_int_err = np.sqrt(grad_int @ pcov @ grad_int)
+
+    grad_k_amp = get_gradient(get_k_amp, popt)
+    k_amp_err = np.sqrt(grad_k_amp @ pcov @ grad_k_amp)
+
+    grad_k_int = get_gradient(get_k_int, popt)
+    k_int_err = np.sqrt(grad_k_int @ pcov @ grad_k_int)
+
+    print(f"\nAverage Lifetimes:")
+    print(f"Amplitude-weighted <tau> = {tau_amp_weighted:.4f} ± {tau_amp_err:.4f} s")
+    print(f"Intensity-weighted <tau> = {tau_int_weighted:.4f} ± {tau_int_err:.4f} s")
+
+    # Keep original k averages for reference, but update to show they are rates
     k_amp_weighted = (A1 * k1 + A2 * k2) / (A1 + A2)
-    # Intensity-weighted (Area-weighted): <k> = (A1 + A2) / (A1/k1 + A2/k2)
-    # This corresponds to 1/<tau>_int where <tau>_int = (A1*tau1 + A2*tau2) / (A1 + A2)
     k_int_weighted = (A1 + A2) / (A1 / k1 + A2 / k2)
     
-    print(f"\nAverages:")
-    print(f"Amplitude-weighted average k2 = {k_amp_weighted:.4f} s⁻¹")
-    print(f"Intensity-weighted average k2 = {k_int_weighted:.4f} s⁻¹")
+    print(f"\nAverage Rates:")
+    print(f"Amplitude-weighted average k = {k_amp_weighted:.4f} ± {k_amp_err:.4f} s⁻¹")
+    print(f"Intensity-weighted average k = {k_int_weighted:.4f} ± {k_int_err:.4f} s⁻¹")
 
     # Residuals
     residuals = dark_part - bi_exp_fit(t_dark, *popt)
