@@ -3,9 +3,17 @@ from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
 from scipy.ndimage import uniform_filter1d
 from matplotlib import pyplot as plt
+import matplotlib as mpl
+# Enable LaTeX rendering
+plt.rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman"],
+})
 import h5py
 import os
 
+mpl.rcParams['savefig.dpi'] = 300
 
 
 class TRASTAnalyzer:
@@ -352,8 +360,12 @@ if __name__ == "__main__":
     ax = plt.gca()
     colors = plt.cm.tab10(np.linspace(0, 1, 10))  # Use a standard color cycle
 
-    # To store results for later plotting
-    results = []
+    # To store data for global fitting
+    all_taus = []
+    all_trast = []
+    all_powers = []
+    all_colors = []
+    all_filenames = []
 
     for i, file_path in enumerate(file_list):
         color = colors[i % len(colors)]
@@ -463,6 +475,12 @@ if __name__ == "__main__":
         )
 
         taus, trast = analyzer.analyze()
+        
+        all_taus.append(taus)
+        all_trast.append(trast)
+        all_powers.append(power_val)
+        all_colors.append(color)
+        all_filenames.append(os.path.basename(file_path))
 
         # ---------------------------------------------------------
         # TRAST curve
@@ -473,327 +491,467 @@ if __name__ == "__main__":
             trast,
             'o',
             color=color,
-            label=f"{os.path.basename(file_path)} (data)"
+            label=None  # Remove from legend
         )
 
-        # ---------------------------------------------------------
-        # Fit TRAST curve
-        # ---------------------------------------------------------
+        h5data.close()
 
-        def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl, model_type='triplet_dark'):
+    # ---------------------------------------------------------
+    # Global Fit TRAST curves
+    # ---------------------------------------------------------
+
+    def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl, tau_diff=0, A_diff=0, model_type='triplet_dark', include_bleaching=True):
             """
-            TRAST model for triplet state + another reversible dark state + bleaching.
+            TRAST model for triplet state + another reversible dark state + bleaching + diffusion.
             tau_T: Triplet lifetime (or the only dark state if model_type is 'one_dark')
             A: Triplet amplitude (or the only dark state amplitude)
             tau_D: Second dark state lifetime
             A_D: Second dark state amplitude
             tau_bl: Bleaching lifetime
+            tau_diff: Diffusion time
+            A_diff: Diffusion amplitude (fraction of molecules that can diffuse out)
+            include_bleaching: Whether to include the bleaching term
             """
             triplet = A * (1 - (1 - np.exp(-tau / tau_T)) / (tau / tau_T))
-            bleaching = (1 - np.exp(-tau / tau_bl)) / (tau / tau_bl)
+            
+            if include_bleaching:
+                bleaching = (1 - np.exp(-tau / tau_bl)) / (tau / tau_bl)
+            else:
+                bleaching = 1.0
+            
+            diffusion = 1.0
+            if tau_diff > 0:
+                # 3D diffusion term averaged over the pulse: 1 / (1 + tau/tau_diff)
+                # A simplified version often used in TRAST:
+                diffusion = 1 - A_diff * (1 - (1 / (1 + tau / tau_diff)))
 
             if model_type == 'one_dark':
-                return (1 - triplet) * bleaching
+                return (1 - triplet) * bleaching * diffusion
             
             dark_state2 = A_D * (1 - (1 - np.exp(-tau / tau_D)) / (tau / tau_D))
-            return (1 - triplet - dark_state2) * bleaching
+            return (1 - triplet - dark_state2) * bleaching * diffusion
 
-        # Choose model: 'triplet_dark' or 'one_dark'
-        use_model = 'triplet_dark'
-
-        try:
-            if use_model == 'one_dark':
-                # Initial guesses: tau_D = 10ms, A_D = 0.2, tau_bl = 2s
-                p0 = [10e-3, 0.2, 2]
-                bounds = ([1e-6, 0, 1], [2, 1, 1000])
-                
-                # Wrapper to pass model_type to curve_fit if needed, 
-                # but curve_fit expects params as args.
-                popt, pcov = curve_fit(lambda t, tD, AD, tbl: trast_model(t, tD, AD, 0, 0, tbl, model_type='one_dark'), 
-                                       taus, trast, p0=p0, bounds=bounds)
-                
-                tau_D_fit, A_D_fit, tau_bl_fit = popt
-                perr = np.sqrt(np.diag(pcov))
-
-                # Calculate kinetic rates and state lifetimes
-                # k_on: Bright -> Dark, k_off: Dark -> Bright
-                k_on = A_D_fit / tau_D_fit
-                k_off = (1 - A_D_fit) / tau_D_fit
-                tau_bright = 1 / k_on
-                tau_dark = 1 / k_off
-
-                # Error propagation for lifetimes using covariance matrix
-                # f(tau, A) = tau / A => df/dtau = 1/A, df/dA = -tau/A^2
-                # f(tau, A) = tau / (1-A) => df/dtau = 1/(1-A), df/dA = tau/(1-A)^2
-                grad_bright = np.array([1 / A_D_fit, -tau_D_fit / (A_D_fit ** 2)])
-                grad_dark = np.array([1 / (1 - A_D_fit), tau_D_fit / ((1 - A_D_fit) ** 2)])
-                
-                pcov_sub = pcov[:2, :2]
-                tau_bright_err = np.sqrt(grad_bright @ pcov_sub @ grad_bright)
-                tau_dark_err = np.sqrt(grad_dark @ pcov_sub @ grad_dark)
-
-                print(f"\nFit Results (One Dark State) for {os.path.basename(file_path)}:")
-                print(f"Relaxation time (tau_D): {tau_D_fit * 1e3:.2g} ± {perr[0] * 1e3:.2g} ms")
-                print(f"Dark State Amplitude (A_D): {A_D_fit:.2g} ± {perr[1]:.2g}")
-                print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2g} ± {perr[2] * 1e3:.2g} ms")
-                print(f"Kinetic rates: k_on = {k_on:.2g} s^-1, k_off = {k_off:.2g} s^-1")
-                print(f"State lifetimes: tau_bright = {tau_bright * 1e3:.2g} ± {tau_bright_err * 1e3:.2g} ms, "
-                      f"tau_dark = {tau_dark * 1e3:.2g} ± {tau_dark_err * 1e3:.2g} ms")
-
-                fit_curve = lambda t, *p: trast_model(t, p[0], p[1], 0, 0, p[2], model_type='one_dark')
+    def global_model(taus_list, *params):
+        """
+        Global model where diffusion parameters and tau_D are shared across all datasets.
+        params: [tau_diff, A_diff, tau_D, tau_T1, A1, A_D1, tau_bl1, tau_T2, A2, ...]
+        """
+        tau_diff = params[0]
+        A_diff = params[1]
+        tau_D = params[2]
+        
+        include_bleaching = use_bleaching # Use global flag
+        n_datasets = len(taus_list)
+        n_params_per_set = 4 if include_bleaching else 3
+        
+        y_concatenated = []
+        for i in range(n_datasets):
+            idx = 3 + i * n_params_per_set
+            if include_bleaching:
+                tau_T, A, A_D, tau_bl = params[idx:idx + n_params_per_set]
             else:
-                # Initial guesses: tau_T = 1ms, A = 0.2, tau_D = 10ms, A_D = 0.1, tau_bl = 100ms
-                p0 = [1e-6, 0.2, 10e-3, 0.1, 2]
-                bounds = ([1e-7, 0, 1e-6, 0, 1], [1e-3, 1, 1, 1, 100])
-                popt, pcov = curve_fit(lambda t, tT, AT, tD, AD, tbl: trast_model(t, tT, AT, tD, AD, tbl, model_type='triplet_dark'), 
-                                       taus, trast, p0=p0, bounds=bounds)
+                tau_T, A, A_D = params[idx:idx + n_params_per_set]
+                tau_bl = 1e9 # Not used but passed
+            y = trast_model(taus_list[i], tau_T, A, tau_D, A_D, tau_bl, tau_diff, A_diff, model_type='triplet_dark', include_bleaching=include_bleaching)
+            y_concatenated.extend(y)
+        return np.array(y_concatenated)
 
-                tau_T_fit, A_fit, tau_D_fit, A_D_fit, tau_bl_fit = popt
-                perr = np.sqrt(np.diag(pcov))
+    def global_model_no_diff(taus_list, *params):
+        """
+        Global model where tau_D is shared across all datasets, NO diffusion.
+        params: [tau_D, tau_T1, A1, A_D1, tau_bl1, tau_T2, A2, ...]
+        """
+        tau_D = params[0]
+        
+        include_bleaching = use_bleaching # Use global flag
+        n_datasets = len(taus_list)
+        n_params_per_set = 4 if include_bleaching else 3
+        
+        y_concatenated = []
+        for i in range(n_datasets):
+            idx = 1 + i * n_params_per_set
+            if include_bleaching:
+                tau_T, A, A_D, tau_bl = params[idx:idx + n_params_per_set]
+            else:
+                tau_T, A, A_D = params[idx:idx + n_params_per_set]
+                tau_bl = 1e9 # Not used but passed
+            # Call trast_model with tau_diff=0, A_diff=0
+            y = trast_model(taus_list[i], tau_T, A, tau_D, A_D, tau_bl, tau_diff=0, A_diff=0, model_type='triplet_dark', include_bleaching=include_bleaching)
+            y_concatenated.extend(y)
+        return np.array(y_concatenated)
 
-                # Calculate kinetic rates and state lifetimes
-                k_ST = A_fit / tau_T_fit
-                k_TS = (1 - A_fit) / tau_T_fit
+    # Choose model: 'triplet_dark', 'one_dark' or 'triplet_dark_diff'
+    use_model = 'triplet_dark_diff'
+    use_bleaching = True
+
+    if use_model in ['triplet_dark_diff', 'triplet_dark']:
+        print("\n" + "=" * 60)
+        if use_model == 'triplet_dark_diff':
+            print("Performing Global Fit (Shared Diffusion and tau_D)")
+        else:
+            print("Performing Global Fit (Shared tau_D, No Diffusion)")
+        if not use_bleaching:
+            print("Bleaching is DISABLED in the model.")
+        print("=" * 60)
+        
+        n_datasets = len(all_taus)
+        n_params_per_set = 4 if use_bleaching else 3
+        
+        if use_model == 'triplet_dark_diff':
+            # Shared params: tau_diff, A_diff, tau_D
+            # Per-dataset params: tau_T, A, A_D, tau_bl
+            
+            # Initial guesses: tau_diff=100ms, A_diff=0.1, tau_D=10ms
+            p0 = [100e-3, 0.1, 10e-3]
+            lower_bounds = [1e-3, 0, 1e-6]
+            upper_bounds = [1e4, 1, 1]
+            n_shared = 3
+        else:
+            # Shared params: tau_D
+            # Per-dataset params: tau_T, A, A_D, tau_bl
+            
+            # Initial guesses: tau_D=10ms
+            p0 = [10e-3]
+            lower_bounds = [1e-6]
+            upper_bounds = [1]
+            n_shared = 1
+        
+        for _ in range(n_datasets):
+            # tau_T=1us, AT=0.2, AD=0.1, tbl=2s
+            if use_bleaching:
+                p0.extend([1e-6, 0.2, 0.1, 2])
+                lower_bounds.extend([1e-7, 0, 0, 1])
+                upper_bounds.extend([1e-3, 1, 1, 100])
+            else:
+                p0.extend([1e-6, 0.2, 0.1])
+                lower_bounds.extend([1e-7, 0, 0])
+                upper_bounds.extend([1e-3, 1, 1])
+            
+        try:
+            # Flatten trast data for curve_fit
+            y_data = np.concatenate(all_trast)
+            
+            # Wrapper for curve_fit
+            def fit_func(x_ignored, *params):
+                if use_model == 'triplet_dark_diff':
+                    return global_model(all_taus, *params)
+                else:
+                    return global_model_no_diff(all_taus, *params)
+                
+            popt, pcov = curve_fit(fit_func, np.zeros(len(y_data)), y_data, p0=p0, bounds=(lower_bounds, upper_bounds))
+            perr = np.sqrt(np.diag(pcov))
+            
+            if use_model == 'triplet_dark_diff':
+                tau_diff_fit = popt[0]
+                A_diff_fit = popt[1]
+                tau_D_fit = popt[2]
+                
+                print(f"\nGlobal Fit Shared Parameters:")
+                print(f"Diffusion time (tau_diff): {tau_diff_fit * 1e3:.2g} ± {perr[0] * 1e3:.2g} ms")
+                print(f"Diffusion amplitude (A_diff): {A_diff_fit:.2g} ± {perr[1]:.2g}")
+                print(f"Dark State 2 relaxation time (tau_D): {tau_D_fit * 1e3:.2g} ± {perr[2] * 1e3:.2g} ms")
+            else:
+                tau_D_fit = popt[0]
+                tau_diff_fit = 0
+                A_diff_fit = 0
+                print(f"\nGlobal Fit Shared Parameters:")
+                print(f"Dark State 2 relaxation time (tau_D): {tau_D_fit * 1e3:.2g} ± {perr[0] * 1e3:.2g} ms")
+            
+            results = []
+            for i in range(n_datasets):
+                idx = n_shared + i * n_params_per_set
+                dataset_popt = popt[idx:idx+n_params_per_set]
+                dataset_perr = perr[idx:idx+n_params_per_set]
+                
+                if use_bleaching:
+                    tau_T_fit, A_fit, A_D_fit, tau_bl_fit = dataset_popt
+                    tau_bl_err = dataset_perr[3]
+                else:
+                    tau_T_fit, A_fit, A_D_fit = dataset_popt
+                    tau_bl_fit = 1e9
+                    tau_bl_err = 0
+                
+                print(f"\nFit Results for {all_filenames[i]} (Power: {all_powers[i]} uW):")
+                print(f"Dark State 2 Amplitude (A_D): {A_D_fit:.2g} ± {dataset_perr[2]:.2g}")
+                if use_bleaching:
+                    print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2g} ± {tau_bl_err * 1e3:.2g} ms")
+
+                # Calculate kinetic rates and state lifetimes for the Dark State 2
                 k_SD = A_D_fit / tau_D_fit
                 k_DS = (1 - A_D_fit) / tau_D_fit
+                k_bl = 1 / tau_bl_fit if use_bleaching else 0
                 
-                tau_S_triplet = 1 / k_ST
-                tau_T_state = 1 / k_TS
                 tau_S_dark = 1 / k_SD
                 tau_D_state = 1 / k_DS
 
-                # Error propagation for triplet lifetimes
-                grad_S_triplet = np.array([1 / A_fit, -tau_T_fit / (A_fit ** 2)])
-                grad_T_state = np.array([1 / (1 - A_fit), tau_T_fit / ((1 - A_fit) ** 2)])
-                pcov_T = pcov[0:2, 0:2]
-                tau_S_triplet_err = np.sqrt(grad_S_triplet @ pcov_T @ grad_S_triplet)
-                tau_T_state_err = np.sqrt(grad_T_state @ pcov_T @ grad_T_state)
-
                 # Error propagation for dark state lifetimes
+                # We need to consider that tau_D is now shared
+                # popt index for shared tau_D is n_shared - 1 (last shared param)
+                # popt index for A_D_fit is idx + 2
                 grad_S_dark = np.array([1 / A_D_fit, -tau_D_fit / (A_D_fit ** 2)])
                 grad_D_state = np.array([1 / (1 - A_D_fit), tau_D_fit / ((1 - A_D_fit) ** 2)])
-                pcov_D = pcov[2:4, 2:4]
+                
+                # Covariance between tau_D and A_D
+                shared_tauD_idx = n_shared - 1
+                cov_tauD_AD = pcov[shared_tauD_idx, idx+2]
+                var_tauD = pcov[shared_tauD_idx, shared_tauD_idx]
+                var_AD = pcov[idx+2, idx+2]
+                
+                pcov_D = np.array([[var_tauD, cov_tauD_AD], [cov_tauD_AD, var_AD]])
                 tau_S_dark_err = np.sqrt(grad_S_dark @ pcov_D @ grad_S_dark)
                 tau_D_state_err = np.sqrt(grad_D_state @ pcov_D @ grad_D_state)
 
-                print(f"\nFit Results (Triplet + Dark State) for {os.path.basename(file_path)}:")
-                # print(f"Triplet relaxation time (tau_T): {tau_T_fit * 1e6:.2g} ± {perr[0] * 1e6:.2g} µs")
-                # print(f"Triplet Amplitude (A): {A_fit:.2g} ± {perr[1]:.2g}")
-                print(f"Dark State 2 relaxation time (tau_D): {tau_D_fit * 1e3:.2g} ± {perr[2] * 1e3:.2g} ms")
-                print(f"Dark State 2 Amplitude (A_D): {A_D_fit:.2g} ± {perr[3]:.2g}")
-                print(f"Bleaching lifetime (tau_bl): {tau_bl_fit * 1e3:.2g} ± {perr[4] * 1e3:.2g} ms")
-                # print(f"Triplet rates: k_ST = {k_ST:.2g} s^-1, k_TS = {k_TS:.2g} s^-1")
-                print(f"Dark state rates: k_SD = {k_SD:.2g} s^-1, k_DS = {k_DS:.2g} s^-1")
-                # print(f"State lifetimes (Triplet): tau_S = {tau_S_triplet * 1e6:.2g} ± {tau_S_triplet_err * 1e6:.2g} µs, "
-                #      f"tau_T = {tau_T_state * 1e6:.2g} ± {tau_T_state_err * 1e6:.2g} µs")
-                print(f"State lifetimes (Dark): tau_S = {tau_S_dark * 1e3:.2g} ± {tau_S_dark_err * 1e3:.2g} ms, "
-                      f"tau_D = {tau_D_state * 1e3:.2g} ± {tau_D_state_err * 1e3:.2g} ms")
+                # Plot fit
+                tau_fine = np.logspace(np.log10(all_taus[i].min()), np.log10(all_taus[i].max()), 100)
+                # Params for trast_model: tau_T, A, tau_D, A_D, tau_bl, tau_diff, A_diff
+                fit_y = trast_model(tau_fine, tau_T_fit, A_fit, tau_D_fit, A_D_fit, tau_bl_fit, tau_diff_fit, A_diff_fit, model_type='triplet_dark', include_bleaching=use_bleaching)
                 
-                fit_curve = lambda t, *p: trast_model(t, p[0], p[1], p[2], p[3], p[4], model_type='triplet_dark')
+                power_val = all_powers[i]
+                power_conv = power_val * 8.44444 if power_val is not None else None
+                fit_label = rf"{power_conv:.1f} mmol photons m$^{{-2}}$ s$^{{-1}}$" if power_conv is not None else all_filenames[i].replace('_', '\_')
+                
+                plt.semilogx(tau_fine, fit_y, '-', color=all_colors[i], label=fit_label)
+                
+                if power_val is not None:
+                    res_popt = [tau_T_fit, A_fit, tau_D_fit, A_D_fit]
+                    if use_bleaching: res_popt.append(tau_bl_fit)
+                    res_popt.extend([tau_diff_fit, A_diff_fit])
 
-            # Plot fit
-            tau_fine = np.logspace(np.log10(taus.min()), np.log10(taus.max()), 100)
-            plt.semilogx(tau_fine, fit_curve(tau_fine, *popt), '-', color=color,
-                         label=f'Fit {os.path.basename(file_path)}')
+                    res_perr = [dataset_perr[0], dataset_perr[1], perr[shared_tauD_idx], dataset_perr[2]]
+                    if use_bleaching: res_perr.append(tau_bl_err)
+                    res_perr.extend([perr[0] if use_model=='triplet_dark_diff' else 0, 
+                                    perr[1] if use_model=='triplet_dark_diff' else 0])
 
-            if power_val is not None:
-                res = {
-                    'power': power_val,
-                    'popt': popt,
-                    'perr': perr,
-                    'model_type': use_model
-                }
-                if use_model == 'one_dark':
-                    res.update({
-                        'tau_bright': tau_bright,
-                        'tau_bright_err': tau_bright_err,
-                        'tau_dark': tau_dark,
-                        'tau_dark_err': tau_dark_err
-                    })
-                else:
-                    res.update({
-                        'tau_S_triplet': tau_S_triplet,
-                        'tau_S_triplet_err': tau_S_triplet_err,
-                        'tau_T_state': tau_T_state,
-                        'tau_T_state_err': tau_T_state_err,
+                    res = {
+                        'power': power_val,
+                        'power_conv': power_conv,
+                        'popt': np.array(res_popt),
+                        'perr': np.array(res_perr),
+                        'model_type': use_model,
+                        'use_bleaching': use_bleaching,
+                        'k_1': k_SD,
+                        'k_2': k_DS,
+                        'k_bl': k_bl,
                         'tau_S_dark': tau_S_dark,
                         'tau_S_dark_err': tau_S_dark_err,
                         'tau_D_state': tau_D_state,
-                        'tau_D_state_err': tau_D_state_err
-                    })
-                results.append(res)
-
+                        'tau_D_state_err': tau_D_state_err,
+                        'tau_diff': tau_diff_fit,
+                        'A_diff': A_diff_fit
+                    }
+                    results.append(res)
         except Exception as e:
-            print(f"\nFitting failed for {file_path}: {e}")
+            print(f"\nGlobal fitting failed: {e}")
+            import traceback
+            traceback.print_exc()
+            results = []
 
-        h5data.close()
+    else:
+        # Fallback to original individual fitting for other models if needed
+        # (Though the user specifically asked for diffusion constant across all powers)
+        results = []
+        print("Individual fitting is currently disabled in favor of global fit.")
 
-    plt.xlabel("Pulse width (s)")
-    plt.ylabel("Normalized TRAST signal")
-    plt.title("TRAST Curves Comparison")
+    plt.xlabel(r"Pulse width (s)")
+    plt.ylabel(r"Normalized TRAST signal")
+    # plt.title(r"TRAST Curves Comparison")
     plt.grid(False)
-    plt.legend(loc='lower left')
+    plt.legend(loc='upper right', frameon=False)
+
+    # Add inset for rates vs power
+    if results:
+        results_sorted = sorted(results, key=lambda x: x['power_conv'] if x['power_conv'] is not None else 0)
+        powers_inset = [r['power_conv'] for r in results_sorted if r['power_conv'] is not None]
+        k1_vals = [r['k_1'] for r in results_sorted if r['power_conv'] is not None]
+        k2_vals = [r['k_2'] for r in results_sorted if r['power_conv'] is not None]
+        kbl_vals = [r['k_bl'] for r in results_sorted if r['power_conv'] is not None]
+
+        if powers_inset:
+            from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+            ax_inset = inset_axes(ax, width="40%", height="40%", loc='lower left', borderpad=4)
+            
+            # Primary y-axis for k1 and kbl
+            ln1 = ax_inset.plot(powers_inset, k1_vals, 'o-', label='$k_1$', markersize=4, color='C3')
+            ln3 = ax_inset.plot(powers_inset, kbl_vals, '^-', label='$k_3$', markersize=4, color='C4')
+            ax_inset.set_xlabel('Power (mmol photons m$^{-2}$ s$^{-1}$)', fontsize=10)
+            ax_inset.set_ylabel('$k_1, k_3$ (s$^{-1}$)', fontsize=10)
+            ax_inset.tick_params(axis='y', labelsize=10)
+            
+            # Secondary y-axis for k2
+            ax_inset_k2 = ax_inset.twinx()
+            ln2 = ax_inset_k2.plot(powers_inset, k2_vals, 's-', label='$k_2$', markersize=4, color='C5')
+            ax_inset_k2.set_ylabel('$k_2$ (s$^{-1}$)', fontsize=10, color='C5')
+            ax_inset_k2.tick_params(axis='y', labelcolor='C5', labelsize=10)
+            
+            # Combine legends
+            lns = ln1 + ln2 + ln3
+            labs = [l.get_label() for l in lns]
+            ax_inset.legend(lns, labs, fontsize=8, loc='best', frameon=False)
+            
+            ax_inset.tick_params(axis='x', labelsize=10)
+            # ax_inset.set_title(r'Rates vs Power', fontsize=10)
+
     plt.tight_layout()
     plt.show()
-
-    # ---------------------------------------------------------
-    # Plot parameters vs power
-    # ---------------------------------------------------------
-    if results:
-        # Sort results by power
-        results.sort(key=lambda x: x['power'])
-        
-        # Table for Notion
-        print("\n" + "=" * 60)
-        print("RESULTS SUMMARY TABLE (Markdown/Notion)")
-        print("=" * 60)
-        
-        if all(r['model_type'] == 'triplet_dark' for r in results):
-            header = "| Power (uW) | tau_D (ms) | A_D | tau_bl (ms) | tau_S_dark (ms) | tau_D_state (ms) |"
-            sep = "|---|---|---|---|---|---|"
-            print(header)
-            print(sep)
-            for r in results:
-                p = r['power']
-                popt = r['popt']
-                tD = popt[2] * 1e3
-                AD = popt[3]
-                tbl = popt[4] * 1e3
-                tS_dark = r['tau_S_dark'] * 1e3
-                tD_state = r['tau_D_state'] * 1e3
-                print(f"| {p:.2g} | {tD:.2g} | {AD:.2g} | {tbl:.2g} | {tS_dark:.2g} | {tD_state:.2g} |")
-        elif all(r['model_type'] == 'one_dark' for r in results):
-            header = "| Power (uW) | tau_D (ms) | A_D | tau_bl (ms) | tau_bright (ms) | tau_dark (ms) |"
-            sep = "|---|---|---|---|---|---|"
-            print(header)
-            print(sep)
-            for r in results:
-                p = r['power']
-                popt = r['popt']
-                tD = popt[0] * 1e3
-                AD = popt[1]
-                tbl = popt[2] * 1e3
-                tB = r['tau_bright'] * 1e3
-                tDk = r['tau_dark'] * 1e3
-                print(f"| {p:.2g} | {tD:.2g} | {AD:.2g} | {tbl:.2g} | {tB:.2g} | {tDk:.2g} |")
-        print("=" * 60)
-
-        powers = np.array([r['power'] for r in results])
-        popts = np.array([r['popt'] for r in results])
-        perrs = np.array([r['perr'] for r in results])
-        model_types = [r['model_type'] for r in results]
-
-        if all(m == 'triplet_dark' for m in model_types):
-            # Combined figure: original parameters + state lifetimes
-            fig, axes = plt.subplots(3, 3, figsize=(15, 10))
-            axes = axes.flatten()
-            
-            # 1. Original Parameters
-            param_names = ['tau_T (us)', 'A_T', 'tau_D (ms)', 'A_D', 'tau_bl (ms)']
-            factors = [1e6, 1, 1e3, 1, 1e3]
-            
-            for i in range(5):
-                axes[i].errorbar(powers, popts[:, i] * factors[i], yerr=perrs[:, i] * factors[i], fmt='o-', capsize=2)
-                axes[i].set_ylabel(param_names[i])
-            
-            # 2. State Lifetimes
-            tau_S_triplet = np.array([r['tau_S_triplet'] for r in results])
-            tau_S_triplet_err = np.array([r['tau_S_triplet_err'] for r in results])
-            tau_T_state = np.array([r['tau_T_state'] for r in results])
-            tau_T_state_err = np.array([r['tau_T_state_err'] for r in results])
-            
-            tau_S_dark = np.array([r['tau_S_dark'] for r in results])
-            tau_S_dark_err = np.array([r['tau_S_dark_err'] for r in results])
-            tau_D_state = np.array([r['tau_D_state'] for r in results])
-            tau_D_state_err = np.array([r['tau_D_state_err'] for r in results])
-
-            axes[5].errorbar(powers, tau_S_triplet * 1e6, yerr=tau_S_triplet_err * 1e6, fmt='o-', capsize=2)
-            axes[5].set_ylabel('tau_S (triplet) (us)')
-            axes[6].errorbar(powers, tau_T_state * 1e6, yerr=tau_T_state_err * 1e6, fmt='o-', capsize=2)
-            axes[6].set_ylabel('tau_T (triplet) (us)')
-            
-            axes[7].errorbar(powers, tau_S_dark * 1e3, yerr=tau_S_dark_err * 1e3, fmt='o-', capsize=2)
-            axes[7].set_ylabel('tau_S (dark) (ms)')
-            axes[8].errorbar(powers, tau_D_state * 1e3, yerr=tau_D_state_err * 1e3, fmt='o-', capsize=2)
-            axes[8].set_ylabel('tau_D (dark) (ms)')
-
-            for ax in axes:
-                ax.set_xlabel('Power (uW)')
-            
-            plt.suptitle('TRAST Parameters and State Lifetimes vs Laser Power')
-            plt.tight_layout(rect=(0, 0.03, 1, 0.95))
-            plt.show()
-
-            # 3. Requested Summary Figure: Tau_D, A_D, tau_bl, tau_S (dark)
-            fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-            axes = axes.flatten()
-            
-            # Index 2: tau_D, Index 3: A_D, Index 4: tau_bl
-            requested_params = [2, 3, 4]
-            param_names = ['tau_D (ms)', 'A_D', 'tau_bl (ms)']
-            factors = [1e3, 1, 1e3]
-            
-            for i, p_idx in enumerate(requested_params):
-                axes[i].errorbar(powers, popts[:, p_idx] * factors[i], yerr=perrs[:, p_idx] * factors[i], fmt='o-', capsize=2)
-                axes[i].set_ylabel(param_names[i])
-                axes[i].set_xlabel('Power (uW)')
-                axes[i].grid(True)
-            
-            # tau_S (dark)
-            axes[3].errorbar(powers, tau_S_dark * 1e3, yerr=tau_S_dark_err * 1e3, fmt='o-', capsize=2)
-            axes[3].set_ylabel('tau_S (dark) (ms)')
-            axes[3].set_xlabel('Power (uW)')
-            axes[3].grid(True)
-            
-            plt.suptitle('Selected Parameters vs Laser Power')
-            plt.tight_layout(rect=(0, 0.03, 1, 0.95))
-            plt.show()
-
-        elif all(m == 'one_dark' for m in model_types):
-            # Combined figure: original parameters + state lifetimes
-            fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-            axes = axes.flatten()
-            
-            # 1. Original Parameters
-            param_names = ['tau_D (ms)', 'A_D', 'tau_bl (ms)']
-            factors = [1e3, 1, 1e3]
-            
-            for i in range(3):
-                axes[i].errorbar(powers, popts[:, i] * factors[i], yerr=perrs[:, i] * factors[i], fmt='o-')
-                axes[i].set_ylabel(param_names[i])
-                axes[i].grid(True)
-            
-            # 2. State Lifetimes
-            tau_bright = np.array([r['tau_bright'] for r in results])
-            tau_bright_err = np.array([r['tau_bright_err'] for r in results])
-            tau_dark = np.array([r['tau_dark'] for r in results])
-            tau_dark_err = np.array([r['tau_dark_err'] for r in results])
-
-            axes[3].errorbar(powers, tau_bright * 1e3, yerr=tau_bright_err * 1e3, fmt='o-', capsize=2)
-            axes[3].set_ylabel('tau_bright (ms)')
-            axes[4].errorbar(powers, tau_dark * 1e3, yerr=tau_dark_err * 1e3, fmt='o-', capsize=2)
-            axes[4].set_ylabel('tau_dark (ms)')
-            
-            axes[5].axis('off')
-
-            for i in [3, 4]:
-                axes[i].set_xlabel('Power (uW)')
-                axes[i].grid(True)
-            
-            for i in range(3):
-                axes[i].set_xlabel('Power (uW)')
-
-            plt.suptitle('TRAST Parameters and State Lifetimes vs Laser Power (One Dark State)')
-            plt.tight_layout(rect=(0, 0.03, 1, 0.95))
-            plt.show()
-        else:
-            print("Mixed models in results, skipping summary plot.")
-
-    # ---------------------------------------------------------
-    # Visualize slow pulse reconstruction
-    # ---------------------------------------------------------
-
-    # analyzer.reconstruct_trace(
-    #      dataset_index=-4,
-    #      bin_width=0.05
-    #  )
+    #
+    # # ---------------------------------------------------------
+    # # Plot parameters vs power
+    # # ---------------------------------------------------------
+    # if results:
+    #     # Sort results by power
+    #     results.sort(key=lambda x: x['power'])
+    #
+    #     # Table for Notion
+    #     print("\n" + "=" * 60)
+    #     print("RESULTS SUMMARY TABLE (Markdown/Notion)")
+    #     print("=" * 60)
+    #
+    #     if all(r['model_type'] == 'triplet_dark' for r in results):
+    #         header = "| Power (mmol photons m^-2 s^-1) | tau_D (ms) | A_D | tau_bl (ms) | tau_S_dark (ms) | tau_D_state (ms) |"
+    #         sep = "|---|---|---|---|---|---|"
+    #         print(header)
+    #         print(sep)
+    #         for r in results:
+    #             p = r['power_conv']
+    #             popt = r['popt']
+    #             tD = popt[2] * 1e3
+    #             AD = popt[3]
+    #             tbl = popt[4] * 1e3
+    #             tS_dark = r['tau_S_dark'] * 1e3
+    #             tD_state = r['tau_D_state'] * 1e3
+    #             print(f"| {p:.2g} | {tD:.2g} | {AD:.2g} | {tbl:.2g} | {tS_dark:.2g} | {tD_state:.2g} |")
+    #     elif all(r['model_type'] == 'one_dark' for r in results):
+    #         header = "| Power (mmol photons m^-2 s^-1) | tau_D (ms) | A_D | tau_bl (ms) | tau_bright (ms) | tau_dark (ms) |"
+    #         sep = "|---|---|---|---|---|---|"
+    #         print(header)
+    #         print(sep)
+    #         for r in results:
+    #             p = r['power_conv']
+    #             popt = r['popt']
+    #             tD = popt[0] * 1e3
+    #             AD = popt[1]
+    #             tbl = popt[2] * 1e3
+    #             tB = r['tau_bright'] * 1e3
+    #             tDk = r['tau_dark'] * 1e3
+    #             print(f"| {p:.2g} | {tD:.2g} | {AD:.2g} | {tbl:.2g} | {tB:.2g} | {tDk:.2g} |")
+    #     print("=" * 60)
+    #
+    #     powers = np.array([r['power_conv'] for r in results])
+    #     popts = np.array([r['popt'] for r in results])
+    #     perrs = np.array([r['perr'] for r in results])
+    #     model_types = [r['model_type'] for r in results]
+    #
+    #     if all(m == 'triplet_dark' for m in model_types):
+    #         # Combined figure: original parameters + state lifetimes
+    #         fig, axes = plt.subplots(3, 3, figsize=(15, 10))
+    #         axes = axes.flatten()
+    #
+    #         # 1. Original Parameters
+    #         param_names = ['tau_T (us)', 'A_T', 'tau_D (ms)', 'A_D', 'tau_bl (ms)']
+    #         factors = [1e6, 1, 1e3, 1, 1e3]
+    #
+    #         for i in range(5):
+    #             axes[i].errorbar(powers, popts[:, i] * factors[i], yerr=perrs[:, i] * factors[i], fmt='o-', capsize=2)
+    #             axes[i].set_ylabel(param_names[i])
+    #
+    #         # 2. State Lifetimes
+    #         tau_S_triplet = np.array([r['tau_S_triplet'] for r in results])
+    #         tau_S_triplet_err = np.array([r['tau_S_triplet_err'] for r in results])
+    #         tau_T_state = np.array([r['tau_T_state'] for r in results])
+    #         tau_T_state_err = np.array([r['tau_T_state_err'] for r in results])
+    #
+    #         tau_S_dark = np.array([r['tau_S_dark'] for r in results])
+    #         tau_S_dark_err = np.array([r['tau_S_dark_err'] for r in results])
+    #         tau_D_state = np.array([r['tau_D_state'] for r in results])
+    #         tau_D_state_err = np.array([r['tau_D_state_err'] for r in results])
+    #
+    #         axes[5].errorbar(powers, tau_S_triplet * 1e6, yerr=tau_S_triplet_err * 1e6, fmt='o-', capsize=2)
+    #         axes[5].set_ylabel('tau_S (triplet) (us)')
+    #         axes[6].errorbar(powers, tau_T_state * 1e6, yerr=tau_T_state_err * 1e6, fmt='o-', capsize=2)
+    #         axes[6].set_ylabel('tau_T (triplet) (us)')
+    #
+    #         axes[7].errorbar(powers, tau_S_dark * 1e3, yerr=tau_S_dark_err * 1e3, fmt='o-', capsize=2)
+    #         axes[7].set_ylabel('tau_S (dark) (ms)')
+    #         axes[8].errorbar(powers, tau_D_state * 1e3, yerr=tau_D_state_err * 1e3, fmt='o-', capsize=2)
+    #         axes[8].set_ylabel('tau_D (dark) (ms)')
+    #
+    #         for ax in axes:
+    #             ax.set_xlabel('Power (mmol photons m^-2 s^-1)')
+    #
+    #         plt.suptitle('TRAST Parameters and State Lifetimes vs Laser Power')
+    #         plt.tight_layout(rect=(0, 0.03, 1, 0.95))
+    #         # plt.show()
+    #
+    #         # 3. Requested Summary Figure: Tau_D, A_D, tau_bl, tau_S (dark)
+    #         fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    #         axes = axes.flatten()
+    #
+    #         # Index 2: tau_D, Index 3: A_D, Index 4: tau_bl
+    #         requested_params = [2, 3, 4]
+    #         param_names = ['tau_D (ms)', 'A_D', 'tau_bl (ms)']
+    #         factors = [1e3, 1, 1e3]
+    #
+    #         for i, p_idx in enumerate(requested_params):
+    #             axes[i].errorbar(powers, popts[:, p_idx] * factors[i], yerr=perrs[:, p_idx] * factors[i], fmt='o-', capsize=2)
+    #             axes[i].set_ylabel(param_names[i])
+    #             axes[i].set_xlabel('Power (mmol photons m^-2 s^-1)')
+    #             axes[i].grid(True)
+    #
+    #         # tau_S (dark)
+    #         axes[3].errorbar(powers, tau_S_dark * 1e3, yerr=tau_S_dark_err * 1e3, fmt='o-', capsize=2)
+    #         axes[3].set_ylabel('tau_S (dark) (ms)')
+    #         axes[3].set_xlabel('Power (mmol photons m^-2 s^-1)')
+    #         axes[3].grid(True)
+    #
+    #         plt.suptitle('Selected Parameters vs Laser Power')
+    #         plt.tight_layout(rect=(0, 0.03, 1, 0.95))
+    #         # plt.show()
+    #
+    #     elif all(m == 'one_dark' for m in model_types):
+    #         # Combined figure: original parameters + state lifetimes
+    #         fig, axes = plt.subplots(2, 3, figsize=(15, 8))
+    #         axes = axes.flatten()
+    #
+    #         # 1. Original Parameters
+    #         param_names = ['tau_D (ms)', 'A_D', 'tau_bl (ms)']
+    #         factors = [1e3, 1, 1e3]
+    #
+    #         for i in range(3):
+    #             axes[i].errorbar(powers, popts[:, i] * factors[i], yerr=perrs[:, i] * factors[i], fmt='o-')
+    #             axes[i].set_ylabel(param_names[i])
+    #             axes[i].grid(True)
+    #
+    #         # 2. State Lifetimes
+    #         tau_bright = np.array([r['tau_bright'] for r in results])
+    #         tau_bright_err = np.array([r['tau_bright_err'] for r in results])
+    #         tau_dark = np.array([r['tau_dark'] for r in results])
+    #         tau_dark_err = np.array([r['tau_dark_err'] for r in results])
+    #
+    #         axes[3].errorbar(powers, tau_bright * 1e3, yerr=tau_bright_err * 1e3, fmt='o-', capsize=2)
+    #         axes[3].set_ylabel('tau_bright (ms)')
+    #         axes[4].errorbar(powers, tau_dark * 1e3, yerr=tau_dark_err * 1e3, fmt='o-', capsize=2)
+    #         axes[4].set_ylabel('tau_dark (ms)')
+    #
+    #         axes[5].axis('off')
+    #
+    #         for i in [3, 4]:
+    #             axes[i].set_xlabel('Power (mmol photons m^-2 s^-1)')
+    #             axes[i].grid(True)
+    #
+    #         for i in range(3):
+    #             axes[i].set_xlabel('Power (mmol photons m^-2 s^-1)')
+    #
+    #         plt.suptitle('TRAST Parameters and State Lifetimes vs Laser Power (One Dark State)')
+    #         plt.tight_layout(rect=(0, 0.03, 1, 0.95))
+    #         # plt.show()
+    #     else:
+    #         print("Mixed models in results, skipping summary plot.")
+    #
+    # # ---------------------------------------------------------
+    # # Visualize slow pulse reconstruction
+    # # ---------------------------------------------------------
+    #
+    # # analyzer.reconstruct_trace(
+    # #      dataset_index=-4,
+    # #      bin_width=0.05
+    # #  )

@@ -8,7 +8,8 @@ import kinetic_model
 # Select one dataset
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
-# folder_name = '741 mE'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+# folder_name = '446 mE'
 # folder_name = 'LHCII SOD'
 folder_name = 'LHCII Control 301 mE'
 data_dir = os.path.join(base_data_dir, folder_name)
@@ -77,7 +78,7 @@ p0 = [A1_guess, k1_guess, A2_guess, k2_guess, C_guess]
 print("Fitting bi-exponential to dark phase...")
 try:
     # Adding bounds to ensure rates are positive and meaningful
-    bounds = ([-np.inf, 0, -np.inf, 0, -np.inf], [np.inf, 100, np.inf, 100, np.inf])
+    bounds = ([-np.inf, 0, -np.inf, 0, -np.inf], [0, 100, 0, 100, np.inf])
     popt, pcov = curve_fit(bi_exp_fit, t_dark, dark_part, p0=p0, bounds=bounds)
     perr = np.sqrt(np.diag(pcov))
     

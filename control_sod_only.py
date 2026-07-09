@@ -97,6 +97,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
         perr = np.sqrt(np.diag(pcov))
+        print(popt, perr)
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
         q_sum_err = perr[5]
@@ -349,5 +350,51 @@ for display_name, pcov in covariance_data.items():
         analyze_covariance(pcov, param_names)
     else:
         print(f"\n{display_name}: No valid covariance data available")
+
+# Create bar plot of fold-change (SOD / Control) for k1-k4
+print("\n" + "=" * 80)
+print("Creating fold-change bar plot...")
+print("=" * 80)
+
+if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
+    control_popt = all_data['LHCII Control']['popt']
+    sod_popt = all_data['LHCII SOD']['popt']
+
+    # Rates: k1=idx 0, k2=idx 1 (but fixed to 0.54 in model), k3=idx 3, k4=idx 4
+    # The user asked for k1-k4.
+    # Note: in fitfunc, k2 is hardcoded to 0.54, so k_sod[1] / k_control[1] should technically use the fixed value or the popt[1] which might be the p0[1] if it didn't change or if it was allowed to float but ignored.
+    
+    k_indices = [0, 1, 3, 4]
+    k_labels = [r'$k_1$', r'$k_2$', r'$k_3$', r'$k_4$']
+    
+    # Use fixed k2 value 0.54 as defined in fitfunc for both if we want the actual model rates
+    k_control = [control_popt[0], 0.54, control_popt[3], control_popt[4]]
+    k_sod = [sod_popt[0], 0.59, sod_popt[3], sod_popt[4]]
+    
+    fold_changes = [sod / ctrl if ctrl != 0 else np.nan for sod, ctrl in zip(k_sod, k_control)]
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    bars = ax.bar(k_labels, fold_changes, color=['C0', 'C1', 'C2', 'C3'], alpha=0.8, edgecolor='black')
+    
+    # Add a horizontal line at 1.0 for reference
+    ax.axhline(y=1.0, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
+    
+    ax.set_ylabel('Fold-change (SOD / Control)', fontsize=12)
+    ax.set_title('Fold-change in kinetic rates (SOD vs Control)', fontsize=14, fontweight='bold')
+    
+    # Add text labels on top of bars
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                f'{height:.2f}', ha='center', va='bottom', fontsize=11)
+
+    ax.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    
+    # Save fold-change plot
+    fc_plot_file = os.path.join(base_dir, 'k_fold_change_sod_control.png')
+    plt.savefig(fc_plot_file, dpi=300, bbox_inches='tight')
+    print(f"Fold-change plot saved to: {fc_plot_file}")
+    plt.close(fig)
 
 print("\nAnalysis complete!")

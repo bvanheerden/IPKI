@@ -3,6 +3,7 @@ import h5py
 import os
 import json
 from scipy.integrate import solve_ivp
+import scipy.linalg
 
 def kinetic(t, y, k1, k2, k3, k4):
     """Core kinetic model."""
@@ -12,28 +13,58 @@ def kinetic(t, y, k1, k2, k3, k4):
                   [0,  k2, 0, -k1-k3]])  # Unquenched
     return K @ y
 
+
+class Result:
+    """Simple class to mimic solve_ivp return object."""
+    def __init__(self, y):
+        self.y = y
+
+def solve_expm(K, y0, t):
+    """Solve linear ODE system using matrix exponential."""
+    if len(t) == 0:
+        return Result(np.zeros((len(y0), 0)))
+    if len(t) == 1:
+        return Result(y0.reshape(-1, 1))
+    
+    dt = t[1] - t[0]
+    M = scipy.linalg.expm(K * dt)
+    y = np.empty((len(t), len(y0)))
+    y[0] = y0
+    for j in range(1, len(t)):
+        y[j] = M @ y[j-1]
+    return Result(y.T)
+
 def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None):
     """
     Model function for solving the kinetic equations across multiple light/dark phases.
     If k2_light is provided, it is used during light phases instead of k2.
     """
-    kl1 = k2_light if k2_light is not None else k2
-    
+    # kl1 = k2 + k2_light if k2_light is not None else k2
+    kl1 = k2
+
     q0 = q_sum * q_fraction
     q1 = q_sum * (1 - q_fraction)
+    y0 = np.array([0, 0, q0, q1])
     
-    sol1 = solve_ivp(kinetic, [t[0], t[t_dark+1]], [0, 0, q0, q1], t_eval=t[0:t_dark+1],
-                     args=[k1, kl1, k3, k4])
-    sol2 = solve_ivp(kinetic, [t[t_dark], t[t_light+1]], sol1.y[:, -1], t_eval=t[t_dark:t_light+1],
-                     args=[0, k2, 0, 0])
-    sol3 = solve_ivp(kinetic, [t[t_light], t[t_dark2+1]], sol2.y[:, -1], t_eval=t[t_light:t_dark2+1],
-                     args=[k1, kl1, k3, k4])
-    sol4 = solve_ivp(kinetic, [t[t_dark2], t[t_light2+1]], sol3.y[:, -1], t_eval=t[t_dark2:t_light2+1],
-                     args=[0, k2, 0, 0])
-    sol5 = solve_ivp(kinetic, [t[t_light2], t[t_dark3+1]], sol4.y[:, -1], t_eval=t[t_light2:t_dark3+1],
-                     args=[k1, kl1, k3, k4])
-    sol6 = solve_ivp(kinetic, [t[t_dark3], t[-1]], sol5.y[:, -1], t_eval=t[t_dark3:-1],
-                     args=[0, k2, 0, 0])
+    # Light/Dark Phase Matrix Definitions
+    # K = [[Bleached], [Quenched], [UnQuenched2], [Unquenched]]
+    K_light = np.array([[0,  0,  k4,  k3],  # Bleached
+                        [0, -kl1, 0, k1],  # Quenched
+                        [0, 0, -k4, 0],  # UnQuenched 2
+                        [0,  kl1, 0, -k1-k3]])  # Unquenched
+    
+    K_dark = np.array([[0,  0,  0,  0],  # Bleached
+                       [0, -k2, 0, 0],  # Quenched
+                       [0, 0, 0, 0],  # UnQuenched 2
+                       [0,  k2, 0, 0]])  # Unquenched
+    
+    sol1 = solve_expm(K_light, y0, t[0:t_dark+1])
+    sol2 = solve_expm(K_dark, sol1.y[:, -1], t[t_dark:t_light+1])
+    sol3 = solve_expm(K_light, sol2.y[:, -1], t[t_light:t_dark2+1])
+    sol4 = solve_expm(K_dark, sol3.y[:, -1], t[t_dark2:t_light2+1])
+    sol5 = solve_expm(K_light, sol4.y[:, -1], t[t_light2:t_dark3+1])
+    sol6 = solve_expm(K_dark, sol5.y[:, -1], t[t_dark3:-1])
+    
     return sol1, sol2, sol3, sol4, sol5, sol6
 
 def onetrace(data_dir, partnum, startind=0, low_value_threshold=None):

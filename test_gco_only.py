@@ -6,17 +6,19 @@ from scipy.optimize import curve_fit
 import pandas as pd
 import kinetic_model
 
-base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
-dataset_folder = 'LHCII SOD'
+base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+# dataset_folder = 'LHCII SOD'
+dataset_folder = '144 mE AA'
 # dataset_folder = 'LHCII Control 301 mE'
-dataset_name = 'LHCII SOD'
+# dataset_name = 'LHCII SOD'
+dataset_name = '446 mE AA'
 # dataset_name = 'LHCII Control'
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
 
-startind = 1
+startind = 5
 
 # Global defaults; these can be overridden per-dataset by a params.json or params.txt
 default_onlen = 50
@@ -71,7 +73,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
 
     def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
         sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=None)
+                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
 
