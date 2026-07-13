@@ -11,9 +11,15 @@ import kinetic_model
 # Enable LaTeX rendering globally
 plt.rcParams.update({
     "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": ["Computer Modern Roman"],
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    "text.latex.preamble": r"\usepackage{helvet} \renewcommand{\familydefault}{\sfdefault}",
     "savefig.dpi": 300,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
 })
 
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
@@ -214,11 +220,11 @@ for folder_name in all_folders:
                 markersize=4, linewidth=1.5, alpha=0.7)
         if model is not None:
             ax.plot(t_plot, model, '-', color='red', label='Model fit', linewidth=2)
-        ax.set_xlabel(r'Time (s)', fontsize=12)
-        ax.set_ylabel(r'Normalized photon count', fontsize=12)
+        ax.set_xlabel(r'Time (s)')
+        ax.set_ylabel(r'Normalized photon count')
         aa_label = " (with AA)" if has_aa else ""
-        ax.set_title(rf'Trace and Fit for {power_str}{aa_label}', fontsize=14, fontweight='bold')
-        ax.legend(fontsize=10)
+        ax.set_title(rf'Trace and Fit for {power_str}{aa_label}', fontweight='bold')
+        ax.legend()
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
 
@@ -332,14 +338,14 @@ if results:
     ln3 = ax1.errorbar(powers, k3, yerr=k3_err, fmt='o-', label='$k_3$',
                        linewidth=2, markersize=8, color='C1', capsize=5)
     
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)', fontsize=12)
-    ax1.set_ylabel(r'$k_1, k_3$ (s$^{-1}$)', fontsize=12)
+    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
+    ax1.set_ylabel(r'$k_1, k_3$ (s$^{-1}$)')
     
     # Plot K4 on secondary axis
     ax2 = ax1.twinx()
     ln4 = ax2.errorbar(powers, k4, yerr=k4_err, fmt='o-', label='$k_4$',
                        linewidth=2, markersize=8, color='C2', capsize=5)
-    ax2.set_ylabel(r'$k_2, k_4$ (s$^{-1}$)', fontsize=12)
+    ax2.set_ylabel(r'$k_2, k_4$ (s$^{-1}$)')
     # ax2.tick_params(axis='y', labelcolor='C2')
 
     # Plot fixed k2 as a dashed line
@@ -349,7 +355,7 @@ if results:
     # Combined legend
     lns = [ln1, ln2, ln3, ln4]
     labs = [l.get_label() for l in lns]
-    ax1.legend(lns, labs, fontsize=12, loc='upper left', frameon=False)
+    ax1.legend(lns, labs, loc='upper left', frameon=False)
 
     # ax1.set_title('Kinetic Rates vs Laser Power (LHCII no AA)', fontsize=14, fontweight='bold')
     # ax1.grid(True, alpha=0.3)

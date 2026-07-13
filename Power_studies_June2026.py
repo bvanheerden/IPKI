@@ -6,14 +6,27 @@ import json
 from scipy.optimize import curve_fit
 import pandas as pd
 from matplotlib import pyplot as plt
+import matplotlib.ticker as mticker
+import seaborn as sns
 import kinetic_model
+import pickle
+
+sns.set_palette("deep")
 
 # Enable LaTeX rendering globally
 plt.rcParams.update({
-    "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": ["Computer Modern Roman"],
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
     "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
 })
 
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
@@ -30,9 +43,9 @@ default_params = {
 }
 
 onlyplot = False
-load_saved_data = True  # Set to True to skip fitting and load from CSV
-share_q_fraction = True  # Set to True to share q_fraction globally, False for local per dataset
-share_k3 = False  # Set to True to share k3 globally, False for local per dataset
+use_individual_fits = True  # Set to True for individual trace fitting error estimation
+load_saved_data = False  # Set to True to skip fitting and load from CSV
+use_pickle = True  # Set to True to save/load processed traces
 fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for that power
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 
@@ -129,14 +142,22 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
 
 # Loop through all power folders and collect results
 output_file = os.path.join(base_data_dir, 'analysis_results.csv')
+pickle_file = os.path.join(base_data_dir, 'processed_data.pkl')
+
 if load_saved_data and os.path.exists(output_file):
     print(f"Loading saved results from {output_file}...")
     df = pd.read_csv(output_file)
     results = df.to_dict('records')
+    all_datasets = [] # Not needed if only plotting results from CSV
+elif use_pickle and os.path.exists(pickle_file):
+    import pickle
+    print(f"Loading processed data from {pickle_file}...")
+    with open(pickle_file, 'rb') as f:
+        all_datasets = pickle.load(f)
+    results = []
 else:
     results = []
     all_datasets = []
-    output_file = os.path.join(base_data_dir, 'analysis_results.csv')
     
     # Get all folders in the base directory
     all_folders = [f for f in os.listdir(base_data_dir) if os.path.isdir(os.path.join(base_data_dir, f))]
@@ -187,15 +208,23 @@ else:
     
         try:
             # Load and prepare the trace
+            norm_pulsephotons_full, timestep, all_traces_full = kinetic_model.avtrace(folder_path, partlist, startind=startind, low_value_threshold=low_value_threshold, return_all=True)
+            
             if onlyplot:
-                norm_pulsephotons, timestep = kinetic_model.avtrace(folder_path, partlist, startind=startind, low_value_threshold=low_value_threshold)
+                norm_pulsephotons = norm_pulsephotons_full
+                all_traces = all_traces_full
             else:
-                norm_pulsephotons, timestep = kinetic_model.avtrace(folder_path, partlist, startind=startind, low_value_threshold=low_value_threshold)
-                norm_pulsephotons = norm_pulsephotons[startind:]
+                norm_pulsephotons = norm_pulsephotons_full[startind:]
+                all_traces = [tr[startind:] for tr in all_traces_full]
             
             datapoints = len(norm_pulsephotons)
             endpoint = (datapoints - 1) * timestep
             t = np.linspace(0, endpoint, datapoints)
+
+            # Full trace time for plotting
+            datapoints_full = len(norm_pulsephotons_full)
+            endpoint_full = (datapoints_full - 1) * timestep
+            t_full = np.linspace(0, endpoint_full, datapoints_full)
             
             t_dark = onlen
             t_light = t_dark + offlen
@@ -209,7 +238,11 @@ else:
                 'has_aa': has_aa,
                 'folder_name': folder_name,
                 't': t,
+                't_full': t_full,
                 'norm_pulsephotons': norm_pulsephotons,
+                'norm_pulsephotons_full': norm_pulsephotons_full,
+                'all_traces': all_traces,
+                'all_traces_full': all_traces_full,
                 'params': params,
                 't_phases': (t_dark, t_light, t_dark2, t_light2, t_dark3)
             }
@@ -217,6 +250,12 @@ else:
 
         except Exception as e:
             print(f"  Error processing {folder_name}: {e}")
+
+    # Save to pickle if requested
+    if use_pickle and all_datasets:
+        print(f"Saving processed data to {pickle_file}...")
+        with open(pickle_file, 'wb') as f:
+            pickle.dump(all_datasets, f)
 
 # Global Fitting
 if not load_saved_data and all_datasets:
@@ -241,56 +280,28 @@ if not load_saved_data and all_datasets:
         # Number of datasets in this group
         n_ds = len(datasets)
         
-        # We'll put shared k2 at index 0, followed by shared q_fraction (if enabled), 
-        # followed by shared k3 (if enabled), followed by per-dataset parameters
+        # Stage 1: Global fit to get k2_shared
         def global_fitfunc(t_dummy, *args):
             k2_shared = args[0]
             offset = 1
-            q_fraction_shared = None
-            k3_shared = None
-            if share_q_fraction:
-                q_fraction_shared = args[offset]
-                offset += 1
-            if share_k3:
-                k3_shared = args[offset]
-                offset += 1
             
             fit_results = []
             for i in range(n_ds):
                 ds = datasets[i]
                 
                 # Extract per-dataset parameters
-                k1, k2_light = args[offset:offset+2]
-                current_offset = offset + 2
-                
-                if share_k3:
-                    k3_local = k3_shared
-                else:
-                    k3_local = args[current_offset]
-                    current_offset += 1
-                
-                k4, q_sum = args[current_offset:current_offset+2]
-                current_offset += 2
-                
-                if share_q_fraction:
-                    q_fraction_local = q_fraction_shared
-                else:
-                    q_fraction_local = args[current_offset]
-                    current_offset += 1
-                
-                # Update offset for next dataset
-                offset = current_offset
+                k1, k2_light, k3_local, k4, q_sum, q_fraction = args[offset:offset+6]
+                offset += 6
                 
                 t_dark, t_light, t_dark2, t_light2, t_dark3 = ds['t_phases']
                 
                 sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(
-                    ds['t'], k1, k2_shared, k3_local, k4, q_sum, q_fraction_local,
-                    t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light,
+                    ds['t'], k1, k2_shared, k3_local, k4, q_sum, q_fraction,
+                    t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=0 if ds['has_aa'] else k2_light,
                 )
                 res = np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                        sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
                 
-                # Ensure the model length matches the experimental data length
                 if len(res) < len(ds['t']):
                     res = np.pad(res, (0, len(ds['t']) - len(res)), mode='edge')
                 elif len(res) > len(ds['t']):
@@ -304,115 +315,129 @@ if not load_saved_data and all_datasets:
         t_dummy = np.zeros_like(y_data_combined)
 
         # Prepare initial guesses and bounds for shared parameters
-        p0_global = [0.5] # Shared k2 guess
+        p0_global = [0.5] # Shared k2
         lower_bounds = [0]
         upper_bounds = [10]
         
-        if share_q_fraction:
-            p0_global.append(0.2) # Shared q_fraction guess
-            lower_bounds.append(0.0)
-            upper_bounds.append(0.4)
-        
-        if share_k3:
-            p0_global.append(0.1 / 6) # Shared k3 guess
-            lower_bounds.append(0)
-            upper_bounds.append(0.5)
-
         for ds in datasets:
-            dp0 = ds['params']['p0']
-            # Common per-dataset parameters: k1, k2_light
-            p0_global.extend([dp0[0], dp0[2]])
-            lower_bounds.extend([0, 0])
+            dp0 = [1 / 20, 1, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.2]
+            # Per-dataset parameters: k1, k2_light, k3, k4, q_sum, q_fraction
+            p0_global.extend([dp0[0], dp0[2], dp0[3], dp0[4]])
+            lower_bounds.extend([0, 0, 0, 0])
             
-            # Use different bounds for k2_light based on group
             if group_name == 'AA':
-                upper_bounds.extend([5, 2.6]) # AA group: k1 up to 5, k2_light up to 10
+                upper_bounds.extend([5, 2.6, 0.5, 10])
             else:
-                upper_bounds.extend([5, 15])  # Non-AA group: k1 up to 5, k2_light up to 3
-            
-            if not share_k3:
-                p0_global.append(dp0[3]) # k3
-                lower_bounds.append(0)
-                upper_bounds.append(0.5)
-            
-            # Common per-dataset parameters: k4, q_sum
-            p0_global.append(dp0[4]) # k4
-            lower_bounds.append(0)
-            upper_bounds.append(15)
+                upper_bounds.extend([5, 15, 0.5, 15])
 
             if fix_q_sum_at_power is not None and np.isclose(ds['power'], fix_q_sum_at_power):
                 p0_global.append(fixed_q_sum_value)
-                lower_bounds.append(fixed_q_sum_value - 1e-6) # Small range to satisfy some optimizers
+                lower_bounds.append(fixed_q_sum_value - 1e-6)
                 upper_bounds.append(fixed_q_sum_value + 1e-6)
                 print(f"  Fixing q_sum for power {ds['power']} to {fixed_q_sum_value}")
             else:
-                p0_global.append(dp0[5]) # q_sum
-                lower_bounds.append(0.98)
+                p0_global.append(dp0[5] if len(dp0) > 5 else 1.0) # q_sum
+                lower_bounds.append(0.95)
                 upper_bounds.append(1.05)
             
-            if not share_q_fraction:
-                p0_global.append(0.2) # q_fraction
-                lower_bounds.append(0.1)
-                upper_bounds.append(0.3)
+            p0_global.append(dp0[6] if len(dp0) > 6 else 0.2) # q_fraction
+            lower_bounds.append(0.0)
+            upper_bounds.append(0.4)
 
-        popt, pcov = curve_fit(global_fitfunc, t_dummy, y_data_combined, p0=p0_global, 
-                              bounds=(lower_bounds, upper_bounds), verbose=2, max_nfev=500)
+        print(p0_global)
+        print(lower_bounds)
+        print(upper_bounds)
+
+        popt_global, _ = curve_fit(global_fitfunc, t_dummy, y_data_combined, p0=p0_global, 
+                              bounds=(lower_bounds, upper_bounds), verbose=2, max_nfev=1000, ftol=1e-6, xtol=1e-6)
         
-        perr_global = np.sqrt(np.diag(pcov)) if pcov is not None else np.zeros_like(popt)
-        
-        # Extract shared parameters
-        k2_shared = popt[0]
-        k2_shared_err = perr_global[0]
-        ds_offset = 1
-        
-        q_fraction_shared = None
-        q_fraction_shared_err = 0
-        if share_q_fraction:
-            q_fraction_shared = popt[ds_offset]
-            q_fraction_shared_err = perr_global[ds_offset]
-            ds_offset += 1
-        
-        k3_shared = None
-        k3_shared_err = 0
-        if share_k3:
-            k3_shared = popt[ds_offset]
-            k3_shared_err = perr_global[ds_offset]
-            ds_offset += 1
-        
-        # Extract results and store them
-        for i in range(n_ds):
-            ds = datasets[i]
+        k2_shared_val = popt_global[0]
+        print(f"  Stage 1 Global Fit Results: k2={k2_shared_val:.4f}")
+
+        # Stage 2: Local fits for each individual dataset with trace-level jackknife
+        for ds in datasets:
+            print(f"  Processing dataset Power={ds['power']} AA={ds['has_aa']}...")
             
-            # Extract per-dataset parameters from popt and perr_global
-            k1, k2_light = popt[ds_offset:ds_offset+2]
-            pk1, pk2_l = perr_global[ds_offset:ds_offset+2]
-            current_ds_offset = ds_offset + 2
+            def local_fitfunc(t, k1, k2_light, k3, k4, q_sum, q_fraction):
+                t_dark, t_light, t_dark2, t_light2, t_dark3 = ds['t_phases']
+                sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(
+                    t, k1, k2_shared_val, k3, k4, q_sum, q_fraction,
+                    t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=0 if ds['has_aa'] else k2_light,
+                )
+                res = np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
+                                      sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:],
+                                      sol6.y[2][1:]+sol6.y[3][1:]))
+                if len(res) < len(t):
+                    res = np.pad(res, (0, len(t) - len(res)), mode='edge')
+                elif len(res) > len(t):
+                    res = res[:len(t)]
+                return res
+
+            dp0 = [1 / 20, 1, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.2]
+            # Per-dataset parameters: k1, k2_light, k3, k4, q_sum, q_fraction
+            p0_local = [dp0[0], dp0[2], dp0[3], dp0[4], dp0[5] if len(dp0) > 5 else 1.0, dp0[6] if len(dp0) > 6 else 0.2]
+            l_local = [0, 0, 0.002, 0.01, 0.98, 0.1]
+            u_local = [5, 2.6 if group_name == 'AA' else 13, 0.5, 15, 1.05, 0.3]
+            if fix_q_sum_at_power is not None and np.isclose(ds['power'], fix_q_sum_at_power):
+                p0_local[4] = fixed_q_sum_value
+                l_local[4] = fixed_q_sum_value - 1e-6
+                u_local[4] = fixed_q_sum_value + 1e-6
+            # p0_local[4] = 1
+            # l_local[4] = 1 - 1e-6
+            # u_local[4] = 1 + 1e-6
+
+            # Main fit for this dataset
+            popt_local, _ = curve_fit(local_fitfunc, ds['t'], ds['norm_pulsephotons'], p0=p0_local,
+                                      bounds=(l_local, u_local), max_nfev=2000, verbose=1, xtol=1e-6, ftol=1e-6)
             
-            if share_k3:
-                k3_val = k3_shared
-                pk3 = k3_shared_err
+            # Individual trace fitting for local fit
+            individual_fit_results = []
+            n_traces = len(ds['all_traces'])
+            if use_individual_fits and n_traces > 1:
+                print(f"    Performing individual fits for {n_traces} traces...")
+                for j in range(n_traces):
+                    y_trace = ds['all_traces'][j]
+                    y_trace_full = ds['all_traces_full'][j]
+                    
+                    try:
+                        popt_j, _ = curve_fit(local_fitfunc, ds['t'], y_trace, p0=p0_local, bounds=(l_local, u_local),
+                                              max_nfev=100)
+                        individual_fit_results.append(popt_j)
+                        print(popt_j)
+                        
+                        # Plotting the individual trace fit
+                        model_j = local_fitfunc(ds['t'], *popt_j)
+                        fig_j, ax_j = plt.subplots(figsize=(10, 5))
+                        ax_j.plot(ds['t_full'], y_trace_full, 'o', color='gray', label=f'Trace {j+1} data', markersize=3, alpha=0.5)
+                        ax_j.plot(ds['t'], model_j, '-', color='blue', label=f'Fit {j+1}')
+                        ax_j.set_xlabel('Time (s)')
+                        ax_j.set_ylabel('Normalized photon count')
+                        aa_suffix = "_AA" if ds['has_aa'] else ""
+                        ax_j.set_title(f"Trace Fit {j+1}: Power {ds['power_str']}{aa_suffix}")
+                        ax_j.legend()
+                        fit_plot_name = f"individual_fit_{ds['power_str']}{aa_suffix}_trace_{j+1}.png"
+                        plt.savefig(os.path.join(base_data_dir, fit_plot_name))
+                        plt.close(fig_j)
+                        
+                    except Exception as e:
+                        print(f"      Trace {j+1} fit failed: {e}")
+
+                individual_fit_results = np.array(individual_fit_results)
+                n_succ = len(individual_fit_results)
+                if n_succ > 1:
+                    # Error estimated as standard error of the mean: std / sqrt(n)
+                    perr_local = np.std(individual_fit_results, axis=0) #/ np.sqrt(n_succ)
+                else:
+                    perr_local = np.zeros_like(popt_local)
             else:
-                k3_val = popt[current_ds_offset]
-                pk3 = perr_global[current_ds_offset]
-                current_ds_offset += 1
+                perr_local = np.zeros_like(popt_local)
+
+            # Store results
+            k1, k2_light, k3_val, k4, q_sum, q_fraction_val = popt_local
+            pk1, pk2_l, pk3, pk4, pq_s, pq_f = perr_local
             
-            k4, q_sum = popt[current_ds_offset:current_ds_offset+2]
-            pk4, pq_s = perr_global[current_ds_offset:current_ds_offset+2]
-            current_ds_offset += 2
-            
-            if share_q_fraction:
-                q_fraction_val = q_fraction_shared
-                q_fraction_err = q_fraction_shared_err
-            else:
-                q_fraction_val = popt[current_ds_offset]
-                q_fraction_err = perr_global[current_ds_offset]
-                current_ds_offset += 1
-            
-            # Update ds_offset for next dataset
-            ds_offset = current_ds_offset
-            
-            k_list = [k1, k2_shared, k2_light, k3_val, k4, q_sum, q_fraction_val]
-            perr = [pk1, k2_shared_err, pk2_l, pk3, pk4, pq_s, q_fraction_err]
+            k_list = [k1, k2_shared_val, k2_light, k3_val, k4, q_sum, q_fraction_val]
+            perr = [pk1, 0, pk2_l, pk3, pk4, pq_s, pq_f] # Errors for shared params are set to 0 here for simplicity
             
             tau_list = [1 / k if k != 0 else np.nan for k in k_list[:5]]
             tau_err_list = [perr[j] / (k_list[j]**2) if k_list[j] != 0 else np.nan for j in range(5)]
@@ -420,31 +445,26 @@ if not load_saved_data and all_datasets:
             # Calculate individual model for plotting
             t_dark, t_light, t_dark2, t_light2, t_dark3 = ds['t_phases']
             sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(
-                ds['t'], k1, k2_shared, k3_val, k4, q_sum, q_fraction_val,
+                ds['t'], k1, k2_shared_val, k3_val, k4, q_sum, q_fraction_val,
                 t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light
             )
             model = np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                    sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
-            
-            # Ensure the model length matches the experimental data length
             if len(model) < len(ds['t']):
                 model = np.pad(model, (0, len(ds['t']) - len(model)), mode='edge')
             elif len(model) > len(ds['t']):
                 model = model[:len(ds['t'])]
 
             def fmt_val_err(val, err):
-                try:
-                    if np.isfinite(err):
-                        return f"{val:.2g} ± {err:.2g}"
-                except Exception:
-                    pass
+                if np.isfinite(err) and err > 0:
+                    return f"{val:.2g} ± {err:.2g}"
                 return f"{val:.2g}"
 
             results.append({
                 'Power (mE)': ds['power'],
                 'AA': 'Yes' if ds['has_aa'] else 'No',
                 'K1 (s⁻¹)': fmt_val_err(k1, pk1),
-                'K2 (s⁻¹)': fmt_val_err(k2_shared, k2_shared_err),
+                'K2 (s⁻¹)': fmt_val_err(k2_shared_val, 0),
                 'K2_light (s⁻¹)': fmt_val_err(k2_light, pk2_l),
                 'K3 (s⁻¹)': fmt_val_err(k3_val, pk3),
                 'K4 (s⁻¹)': fmt_val_err(k4, pk4),
@@ -454,23 +474,21 @@ if not load_saved_data and all_datasets:
                 'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
                 'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
                 'Q_sum': fmt_val_err(q_sum, pq_s),
-                'Q_fraction': fmt_val_err(q_fraction_val, q_fraction_err)
+                'Q_fraction': fmt_val_err(q_fraction_val, pq_f)
             })
 
-            # Create plot
+            # Plotting
             fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(ds['t'], ds['norm_pulsephotons'], 'o-', color='gray', label='Experimental data',
-                    markersize=4, linewidth=1.5, alpha=0.7)
-            ax.plot(ds['t'], model, '-', color='red', label='Global model fit', linewidth=2)
+            ax.plot(ds['t'], ds['norm_pulsephotons'], 'o-', color='gray', label='Experimental data', markersize=4, linewidth=1.5, alpha=0.7)
+            ax.plot(ds['t'], model, '-', color='red', label='Local model fit', linewidth=2)
             ax.set_xlabel(r'Time (s)', fontsize=12)
             ax.set_ylabel(r'Normalized photon count', fontsize=12)
             aa_label = " (with AA)" if ds['has_aa'] else ""
-            ax.set_title(rf'Trace and Global Fit for {ds["power_str"]}{aa_label}', fontsize=14, fontweight='bold')
+            ax.set_title(rf'Trace and Local Fit for {ds["power_str"]}{aa_label}', fontsize=14, fontweight='bold')
             ax.legend(fontsize=10)
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            
-            plot_name = f'k2_global_fit_{ds["power_str"]}{"_AA" if ds["has_aa"] else ""}.png'
+            plot_name = f'k2_local_fit_{ds["power_str"]}{"_AA" if ds["has_aa"] else ""}.png'
             plt.savefig(os.path.join(base_data_dir, plot_name))
             plt.close()
             
@@ -492,12 +510,16 @@ if results:
 
     # Helper to get numeric values and errors from the formatted strings
     def get_numeric(series):
-        return series.str.split(' ±').str[0].astype(float)
+        if series.dtype == 'O':
+            return series.str.split(' ±').str[0].astype(float)
+        return series.astype(float)
 
     def get_error(series):
-        # Extract the error part, handle cases where no error is present
-        parts = series.str.split(' ±')
-        return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
+        if series.dtype == 'O':
+            # Extract the error part, handle cases where no error is present
+            parts = series.str.split(' ±')
+            return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
+        return pd.Series(0.0, index=series.index)
 
     # Calculate means for numeric columns
     mean_row = []
@@ -551,112 +573,14 @@ df_with_aa = df[df['AA'] == 'Yes'].copy()
 
 if not df_no_aa.empty:
     df_no_aa = df_no_aa.sort_values('Power (mE)')
+    with open('data_no_aa_k2.pkl', 'wb') as f:
+        pickle.dump(df_no_aa, f)
+
 if not df_with_aa.empty:
     df_with_aa = df_with_aa.sort_values('Power (mE)')
+    with open('data_with_aa_k2.pkl', 'wb') as f:
+        pickle.dump(df_with_aa, f)
 
-# Create figure for "with AA" data: single axis for k1, k3, k4
-if not df_with_aa.empty:
-    fig_aa, ax1 = plt.subplots(1, 1, figsize=(8, 6))
-
-    x_aa = df_with_aa['Power (mE)'].values
-    x_extrap = np.linspace(min(2, x_aa.min()), max(2, x_aa.max()), 100)
-
-    # Plot K1 (with AA)
-    k1_aa = get_numeric(df_with_aa['K1 (s⁻¹)'])
-    ax1.errorbar(x_aa, k1_aa,
-                yerr=get_error(df_with_aa['K1 (s⁻¹)']), fmt='o', label=r'$k_1$ (data)',
-                linewidth=2, markersize=8, alpha=0.7, color='C0', capsize=5)
-    # Linear fit for K1 with zero intercept
-    m1 = np.sum(x_aa[:] * k1_aa[:]) / np.sum(x_aa[:]**2)
-    k1_extrap = m1 * 2
-    ax1.plot(x_extrap, m1 * x_extrap, 'C0--', label=r'$k_1$ (linear fit)')
-    ax1.text(2, k1_extrap, rf' {k1_extrap:.2g}', color='C0', va='bottom')
-
-    # Plot K3 (with AA)
-    k3_aa = get_numeric(df_with_aa['K3 (s⁻¹)'])
-    ax1.errorbar(x_aa, k3_aa,
-                yerr=get_error(df_with_aa['K3 (s⁻¹)']), fmt='^', label=r'$k_3$ (data)',
-                linewidth=2, markersize=8, alpha=0.7, color='C1', capsize=5)
-    # Linear fit for K3 with zero intercept
-    m3 = np.sum(x_aa[:-1] * k3_aa[:-1]) / np.sum(x_aa[:-1]**2)
-    k3_extrap = m3 * 2
-    ax1.plot(x_extrap, m3 * x_extrap, 'C1--', label=r'$k_3$ (linear fit)')
-    ax1.text(2, k3_extrap, rf' {k3_extrap:.2g}', color='C1', va='top')
-
-    # Plot K4 (with AA)
-    k4_aa = get_numeric(df_with_aa['K4 (s⁻¹)'])
-    ax1.errorbar(x_aa, 2 * k4_aa,
-                yerr=get_error(df_with_aa['K4 (s⁻¹)']), fmt='v', label=r'$2k_4$ (data)',
-                linewidth=2, markersize=8, alpha=0.7, color='C2', capsize=5)
-    # Linear fit for K4 with zero intercept
-    m4 = np.sum(x_aa[:] * k4_aa[:]) / np.sum(x_aa[:]**2)
-    k4_extrap = m4 * 2
-    ax1.plot(x_extrap, 2 * m4 * x_extrap, 'C2--', label=r'$2k_4$ (linear fit)')
-    ax1.text(2, 2*k4_extrap, rf' {k4_extrap:.2g}', color='C2', va='bottom')
-
-    k2_aa = get_numeric(df_with_aa['K2 (s⁻¹)'])[0]
-    ln2 = ax1.axhline(y=k2_aa, color='gray', linestyle='--', label=rf'$k_2$')
-
-    ax1.set_ylabel(r'$k$ (s$^{-1}$)', fontsize=12)
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)', fontsize=12)
-    ax1.set_xscale('log')
-    ax1.set_yscale('log')
-    ax1.set_xlim(1.5, None)
-    ax1.legend(fontsize=10, loc='best')
-
-    plt.tight_layout()
-    plot_file_aa = os.path.join(base_data_dir, 'k_values_vs_power_with_AA.png')
-    plt.savefig(plot_file_aa, dpi=300, bbox_inches='tight')
-    print(f"With AA plot saved to: {plot_file_aa}")
-
-# Create unified figure for "without AA" data
-if not df_no_aa.empty:
-    fig_no_aa, ax_main = plt.subplots(figsize=(10, 6))
-
-    powers = df_no_aa['Power (mE)']
-    k1 = get_numeric(df_no_aa['K1 (s⁻¹)'])
-    k1_err = get_error(df_no_aa['K1 (s⁻¹)'])
-    k2l = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-    k2l_err = get_error(df_no_aa['K2_light (s⁻¹)'])
-    k3 = get_numeric(df_no_aa['K3 (s⁻¹)'])
-    k3_err = get_error(df_no_aa['K3 (s⁻¹)'])
-    k4 = get_numeric(df_no_aa['K4 (s⁻¹)'])
-    k4_err = get_error(df_no_aa['K4 (s⁻¹)'])
-
-    # Plot k1, k2_light and k4 on primary axis
-    ln1 = ax_main.errorbar(powers, k1, yerr=k1_err, fmt='o-', label=r'$k_1$',
-                          linewidth=2, markersize=8, color='C0', capsize=5)
-    ln2l = ax_main.errorbar(powers, k2l, yerr=k2l_err, fmt='s-', label=r'$k_{2,light}$',
-                          linewidth=2, markersize=8, color='C3', capsize=5)
-    ln4 = ax_main.errorbar(powers, k4, yerr=k4_err, fmt='v-', label=r'$k_4$',
-                          linewidth=2, markersize=8, color='C2', capsize=5)
-
-    # Plot fixed k2 as a dashed line
-    k2_fixed_val = 0.54  # Fixed value for no AA (Thylakoid) from line 177
-    ln2 = ax_main.axhline(y=k2_fixed_val, color='gray', linestyle='--', label=rf'$k_2$')
-
-    ax_main.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)', fontsize=12)
-    ax_main.set_ylabel(r'$k_1, k_2, k_4$ (s$^{-1}$)', fontsize=12)
-
-    # Plot k3 on secondary axis
-    ax_k3 = ax_main.twinx()
-    ln3 = ax_k3.errorbar(powers, k3, yerr=k3_err, fmt='^-', label=r'$k_3$',
-                         linewidth=2, markersize=8, color='C1', capsize=5)
-    ax_k3.set_ylabel(r'$k_3$ (s$^{-1}$)', fontsize=12, color='C1')
-    ax_k3.tick_params(axis='y', labelcolor='C1')
-
-    # Combined legend
-    lns = [ln1, ln2, ln2l, ln3, ln4]
-    labs = [l.get_label() for l in lns]
-    ax_main.legend(lns, labs, fontsize=10, loc='best', frameon=False)
-
-
-    plt.tight_layout()
-    plot_file_no_aa = os.path.join(base_data_dir, 'k_values_vs_power_no_AA.png')
-    plt.savefig(plot_file_no_aa, dpi=300, bbox_inches='tight')
-    print(f"No AA plot saved to: {plot_file_no_aa}")
-
-    plt.show()
-else:
-    print("No results to display")
+print("\nData saved to data_no_aa.pkl and data_with_aa.pkl")
+print("Run 'python plot_power_studies.py' to generate plots.")
 

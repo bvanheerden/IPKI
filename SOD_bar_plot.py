@@ -4,8 +4,14 @@ import os
 
 plt.rcParams.update({
     "text.usetex": True,
-    "font.family": "serif",
-    "font.serif": ["Computer Modern Roman"],
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    "text.latex.preamble": r"\usepackage{helvet} \renewcommand{\familydefault}{\sfdefault}",
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
 })
 
 k_indices = [0, 1, 3, 4, 5]
@@ -34,7 +40,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 bars = ax.bar(k_labels, fold_changes, yerr=fold_change_err, capsize=5,
              color=['C0', 'C1', 'C2', 'C3', 'C4'], alpha=0.8, edgecolor='black')
 
-ax.set_ylabel('Fold-change (SOD / Control)', fontsize=12)
+ax.set_ylabel('Fold-change (SOD / Control)')
 # ax.set_title('Fold-change in kinetic rates (SOD vs Control)', fontsize=14, fontweight='bold')
 
 # Add text labels on top of bars
@@ -42,7 +48,7 @@ for bar, err in zip(bars, fold_change_err):
     height = bar.get_height()
     error = err if not np.isnan(err) else 0
     ax.text(bar.get_x() + bar.get_width() / 2., height + error + 0.02,
-            f'{height:.2f}', ha='center', va='bottom', fontsize=11)
+            f'{height:.2f}', ha='center', va='bottom')
 
 ax.set_ylim(0, max(fold_changes) + max(fold_change_err) + 0.5)
 

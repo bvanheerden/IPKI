@@ -19,35 +19,57 @@ class Result:
     def __init__(self, y):
         self.y = y
 
-def solve_expm(K, y0, t):
-    """Solve linear ODE system using matrix exponential."""
-    if len(t) == 0:
-        return Result(np.zeros((len(y0), 0)))
-    if len(t) == 1:
-        return Result(y0.reshape(-1, 1))
+def solve_expm(M, y0, n):
+    """Solve linear ODE system using matrix exponential properties."""
+    # if n <= 0:
+    #     return Result(np.zeros((len(y0), 1)) if len(y0) > 0 else np.zeros((0, 1)))
     
-    dt = t[1] - t[0]
-    M = scipy.linalg.expm(K * dt)
-    y = np.empty((len(t), len(y0)))
-    y[0] = y0
-    for j in range(1, len(t)):
-        y[j] = M @ y[j-1]
-    return Result(y.T)
+    # Ensure y0 has the correct shape for broadcasting if n=1
+    # but the code below handles it via np.arange(n)
+    
+    # if n == 1:
+    #     return Result(y0.reshape(-1, 1))
+    
+    # y(j) = M^j * y0
+    # To avoid repeated matrix multiplications, we use the property:
+    # y(j) = V * D^j * V^-1 * y0
+    try:
+        vals, vecs = scipy.linalg.eig(M)
+        ivecs = scipy.linalg.inv(vecs)
+        c = ivecs.dot(y0)
+        
+        # vals is (4,), vecs is (4,4), c is (4,)
+        # we want y[j] = vecs @ (vals**j * c)
+        j_range = np.arange(n)
+        # powers shape: (n, 4)
+        powers = vals[np.newaxis, :] ** j_range[:, np.newaxis]
+        # res shape: (n, 4)
+        res = (powers * c[np.newaxis, :]) @ vecs.T
+        return Result(res.real.T)
+    except Exception:
+        # Fallback to iterative if diagonalization fails
+        y = np.empty((n, len(y0)))
+        y[0] = y0
+        y_prev = y0
+        for j in range(1, n):
+            y_curr = M.dot(y_prev)
+            y[j] = y_curr
+            y_prev = y_curr
+        return Result(y.T)
 
-def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None):
+def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None,
+              debug=False):
     """
     Model function for solving the kinetic equations across multiple light/dark phases.
     If k2_light is provided, it is used during light phases instead of k2.
     """
-    # kl1 = k2 + k2_light if k2_light is not None else k2
-    kl1 = k2
+    kl1 = k2 + k2_light if k2_light is not None else k2
 
     q0 = q_sum * q_fraction
     q1 = q_sum * (1 - q_fraction)
     y0 = np.array([0, 0, q0, q1])
     
     # Light/Dark Phase Matrix Definitions
-    # K = [[Bleached], [Quenched], [UnQuenched2], [Unquenched]]
     K_light = np.array([[0,  0,  k4,  k3],  # Bleached
                         [0, -kl1, 0, k1],  # Quenched
                         [0, 0, -k4, 0],  # UnQuenched 2
@@ -58,12 +80,21 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
                        [0, 0, 0, 0],  # UnQuenched 2
                        [0,  k2, 0, 0]])  # Unquenched
     
-    sol1 = solve_expm(K_light, y0, t[0:t_dark+1])
-    sol2 = solve_expm(K_dark, sol1.y[:, -1], t[t_dark:t_light+1])
-    sol3 = solve_expm(K_light, sol2.y[:, -1], t[t_light:t_dark2+1])
-    sol4 = solve_expm(K_dark, sol3.y[:, -1], t[t_dark2:t_light2+1])
-    sol5 = solve_expm(K_light, sol4.y[:, -1], t[t_light2:t_dark3+1])
-    sol6 = solve_expm(K_dark, sol5.y[:, -1], t[t_dark3:-1])
+    dt = t[1] - t[0]
+    M_light = scipy.linalg.expm(K_light * dt)
+    M_dark = scipy.linalg.expm(K_dark * dt)
+
+    sol1 = solve_expm(M_light, y0, t_dark + 1)
+    sol2 = solve_expm(M_dark, sol1.y[:, -1], t_light - t_dark + 1)
+    sol3 = solve_expm(M_light, sol2.y[:, -1], t_dark2 - t_light + 1)
+    if debug:
+        print(t_dark2, t_light)
+        print(sol1.y)
+        print(sol2.y)
+        print(sol3.y)
+    sol4 = solve_expm(M_dark, sol3.y[:, -1], t_light2 - t_dark2 + 1)
+    sol5 = solve_expm(M_light, sol4.y[:, -1], t_dark3 - t_light2 + 1)
+    sol6 = solve_expm(M_dark, sol5.y[:, -1], len(t) - 1 - t_dark3)
     
     return sol1, sol2, sol3, sol4, sol5, sol6
 
@@ -119,8 +150,8 @@ def onetrace(data_dir, partnum, startind=0, low_value_threshold=None):
                 
     return norm_pulsephotons, timestep
 
-def avtrace(data_dir, partnums, startind=0, low_value_threshold=None):
-    """Average multiple traces."""
+def avtrace(data_dir, partnums, startind=0, low_value_threshold=None, return_all=False):
+    """Average multiple traces. If return_all is True, also returns the individual traces."""
     results = [onetrace(data_dir, p, startind, low_value_threshold) for p in partnums]
     traces = [r[0] for r in results]
     timesteps = [r[1] for r in results]
@@ -128,7 +159,12 @@ def avtrace(data_dir, partnums, startind=0, low_value_threshold=None):
     minlength = np.min([len(t) for t in traces])
     traces = [t[:minlength] for t in traces]
     
-    return np.mean(traces, axis=0), np.mean(timesteps, axis=0)
+    avg_trace = np.mean(traces, axis=0)
+    avg_timestep = np.mean(timesteps, axis=0)
+    
+    if return_all:
+        return avg_trace, avg_timestep, traces
+    return avg_trace, avg_timestep
 
 def load_params(data_dir, defaults=None):
     """

@@ -1,0 +1,8 @@
+{
+    "python_interpreter": "/home/bertus/PycharmProjects/Full_SMS/venv3/bin/python",
+    "project_root": "/home/bertus/PycharmProjects/BulkBlinking",
+    "environment_variables": {
+        "PYTHONPATH": "."
+    },
+    "notes": "Always use the venv3 interpreter for running scripts in this project."
+}
