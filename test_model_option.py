@@ -1,6 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
+})
+
 def trast_model(tau, tau_T, A, tau_D, A_D, tau_bl, model_type='triplet_dark'):
     """
     TRAST model for triplet state + another reversible dark state + bleaching.

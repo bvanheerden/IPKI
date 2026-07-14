@@ -1,18 +1,34 @@
 import numpy as np
-import h5py
-from matplotlib import pyplot as plt
 import os
 from scipy.optimize import curve_fit
 import pandas as pd
 import kinetic_model
+import h5py
+from matplotlib import pyplot as plt
+import seaborn as sns
+
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
+})
+
+sns.set_palette('deep')
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
-# dataset_folder = 'LHCII SOD'
-dataset_folder = '144 mE AA'
-# dataset_folder = 'LHCII Control 301 mE'
-# dataset_name = 'LHCII SOD'
-dataset_name = '446 mE AA'
-# dataset_name = 'LHCII Control'
+datasets = [
+    {'folder': '602 mE', 'label': '- AA', 'color': 'C0', 'fit_color': 'C0'},
+    {'folder': '602 mE AA', 'label': '+ AA', 'color': 'C1', 'fit_color': 'C1'}
+]
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -72,8 +88,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
 
 
     def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.23, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=0)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
 
@@ -117,60 +133,80 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
         model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr
+    return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, 
+            popt, perr, (t_dark, t_light, t_dark2, t_light2, t_dark3), timestep)
 
 
-# Process GCO dataset
-print("=" * 80)
-print(f"Processing: {dataset_name}")
-print("=" * 80)
+# Create plot
+print("\nCreating plot...")
+fig, ax = plt.subplots(figsize=(90/25.4, 60/25.4))
 
-folder_path = os.path.join(base_dir, dataset_folder)
+for ds in datasets:
+    dataset_name = ds['label']
+    dataset_folder = ds['folder']
+    
+    print("=" * 80)
+    print(f"Processing: {dataset_name}")
+    print("=" * 80)
 
-# Check if folder exists
-if not os.path.exists(folder_path):
-    print(f"Error: Folder not found: {folder_path}")
-    exit(1)
+    folder_path = os.path.join(base_dir, dataset_folder)
 
-# Check if measurement files exist
-h5_files = [f for f in os.listdir(folder_path) if f.startswith('measurement') and f.endswith('.h5')]
-if not h5_files:
-    print(f"Error: No measurement files found in {folder_path}")
-    exit(1)
+    # Check if folder exists
+    if not os.path.exists(folder_path):
+        print(f"Error: Folder not found: {folder_path}")
+        continue
 
-try:
-    norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr = fittrace(folder_path)
+    # Check if measurement files exist
+    h5_files = [f for f in os.listdir(folder_path) if f.startswith('measurement') and f.endswith('.h5')]
+    if not h5_files:
+        print(f"Error: No measurement files found in {folder_path}")
+        continue
 
-    print(f"\n✓ Successfully processed {dataset_name}")
+    try:
+        (norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err,
+         popt, perr, transition_indices, timestep) = fittrace(folder_path)
 
-    # Create plot
-    print("\nCreating plot...")
-    fig, ax = plt.subplots(figsize=(14, 8))
+        t_dark, t_light, t_dark2, t_light2, t_dark3 = [idx * timestep for idx in transition_indices]
 
-    # Plot experimental data
-    ax.plot(t_plot, norm_pulsephotons, 'o-', color='C0', label=f'{dataset_name} (data)',
-            markersize=3, linewidth=1.5, alpha=0.2)
+        print(f"\n✓ Successfully processed {dataset_name}")
 
-    # Plot model fit
-    if model is not None:
-        ax.plot(t_plot, model, '-', color='C0', label=f'{dataset_name} (fit)',
-                linewidth=2.5, alpha=0.9)
+        # Plot experimental data
+        ax.plot(t_plot, norm_pulsephotons, '.', color=ds['color'], markersize=1, alpha=0.4)
 
-    ax.set_xlabel('Time (s)', fontsize=12)
-    ax.set_ylabel('Normalized photon count', fontsize=12)
-    ax.set_title(f'{dataset_name} - Data and Fit', fontsize=14, fontweight='bold')
-    ax.legend(fontsize=10, loc='best')
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+        # Plot model fit
+        if model is not None:
+            ax.plot(t_plot, model, '-', color=ds['fit_color'], label=f'{dataset_name}', alpha=1)
+            
+        # Update phases from the first dataset (assuming they are consistent)
+        if ds == datasets[0]:
+            phases = [
+                (0, t_dark, 'white'),
+                (t_dark, t_light, 'black'),
+                (t_light, t_dark2, 'white'),
+                (t_dark2, t_light2, 'black'),
+                (t_light2, t_dark3, 'white'),
+                (t_dark3, t_plot[-1], 'black')
+            ]
 
-    # Save plot
-    plot_file = os.path.join(base_dir, 'gco_control_fit.png')
-    plt.savefig(plot_file, dpi=300, bbox_inches='tight')
-    print(f"Plot saved to: {plot_file}")
-    plt.show()
+    except Exception as e:
+        print(f"✗ Error processing {dataset_name}: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
-except Exception as e:
-    print(f"✗ Error processing {dataset_name}: {str(e)}")
-    import traceback
-    traceback.print_exc()
+# Add light/dark bar at the top
+for start, end, color in phases:
+    ax.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
+               edgecolor='black', linewidth=0.5, transform=ax.get_xaxis_transform())
 
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Normalized photon count')
+ax.set_xlim(0, 50)
+ax.text(45, 0.55, '-AA', color='C0')
+ax.text(45, 0.8, '+AA', color='C1')
+plt.tight_layout()
+
+# Save plot
+# plot_file = os.path.join(base_dir, 'aa_comparison_602.png')
+# plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+# print(f"Plot saved to: {plot_file}")
+plt.show()

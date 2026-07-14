@@ -1,6 +1,21 @@
 import numpy as np
 import h5py
 from matplotlib import pyplot as plt
+
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
+})
 import os
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -59,9 +74,9 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         pass
 
     if onlyplot:
-        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
+        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=max(1, startind))
     else:
-        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
+        norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=max(1, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
     datapoints = len(norm_pulsephotons) + 1
     endpoint = datapoints * timestep
@@ -76,8 +91,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
 
 
     def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.54, k3, k4, 1, 0.23, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=None)
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.1, k3, k4, 1, 0.2, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=0)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
 
@@ -123,7 +138,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
     # Return normalized data, model, time base, taus, errors, etc., AND timing parameters
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov, (t_dark, t_light, t_dark2, t_light2, t_dark3)
+    return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt,
+            perr, pcov, (t_dark, t_light, t_dark2, t_light2, t_dark3))
 
 
 def analyze_covariance(pcov, param_names=None):
@@ -198,7 +214,8 @@ for display_name, folder_name in datasets.items():
     try:
         # call fittrace without passing the global default_partlist so that any per-dataset
         # 'partlist' in params.json / params.txt will be used automatically
-        norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov, t_params = fittrace(folder_path)
+        (norm_pulsephotons, model, t_plot, tau_list, tau_err_list, q_sum, q_sum_err, q_fraction, q_fraction_err, popt,
+         perr, pcov, t_params) = fittrace(folder_path)
 
         # Store data for plotting
         all_data[display_name] = {
@@ -305,8 +322,8 @@ for i, display_name in enumerate(plot_datasets):
         t_dark, t_light, t_dark2, t_light2, t_dark3 = data['t_params']
         
         # Recalculate model populations
-        sols = kinetic_model.modelfunc(t, popt[0], 0.50, popt[3], popt[4], 1, 0.23,
-                                      t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None)
+        sols = kinetic_model.modelfunc(t, popt[0], popt[1], popt[3], popt[4], popt[5], popt[6],
+                                      t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=popt[2])
         
         # Combine population trajectories
         pop_trajectories = [[] for _ in range(4)]
@@ -368,8 +385,10 @@ if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
     k_labels = [r'$k_1$', r'$k_2$', r'$k_3$', r'$k_4$']
     
     # Use fixed k2 value 0.54 as defined in fitfunc for both if we want the actual model rates
-    k_control = [control_popt[0], 0.54, control_popt[3], control_popt[4]]
-    k_sod = [sod_popt[0], 0.59, sod_popt[3], sod_popt[4]]
+    k_control = [control_popt[0], control_popt[1], control_popt[3], control_popt[4]]
+    k_sod = [sod_popt[0], sod_popt[1], sod_popt[3], sod_popt[4]]
+    print('k_control', k_control)
+    print('k_sod', k_sod)
     
     fold_changes = [sod / ctrl if ctrl != 0 else np.nan for sod, ctrl in zip(k_sod, k_control)]
     

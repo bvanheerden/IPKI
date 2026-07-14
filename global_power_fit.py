@@ -6,6 +6,21 @@ import pickle
 import pandas as pd
 from scipy.optimize import curve_fit, differential_evolution
 from matplotlib import pyplot as plt
+
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
+})
 import seaborn as sns
 import kinetic_model
 

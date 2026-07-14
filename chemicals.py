@@ -1,21 +1,35 @@
 import numpy as np
-import h5py
-from matplotlib import pyplot as plt
 import os
 from scipy.optimize import curve_fit
 import pandas as pd
 import seaborn as sns
 import kinetic_model
+import h5py
+from matplotlib import pyplot as plt
+
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial"],
+    'mathtext.fontset': 'stixsans',
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,
+    "font.size": 7,
+    'axes.titlesize': 7,
+    'axes.labelsize': 7,
+    'xtick.labelsize': 7,
+    'legend.fontsize': 7,
+})
+
+sns.set_palette('deep')
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
 
 # Datasets to process (map display names to folder names)
 datasets = {
-    'LHCII Control': 'LHCII Control 301 mE',
-    'LHCII GCO Control': 'LHCII GCO Control',
-    'LHCII Magnet': 'LHCII Magnet',
-    'LHCII MV': 'LHCII MV',
-    'LHCII SOD': 'LHCII SOD',
+    'Ambient air': 'LHCII Magnet',
+    'Oxygen scavengers': 'LHCII GCO Control',
 }
 
 # Default parameters for each dataset (can be customized per dataset)
@@ -66,6 +80,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     else:
         norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
+        print(timestep)
     datapoints = len(norm_pulsephotons) + 1
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
@@ -79,7 +94,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
 
 
     def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.50, k3, k4, 1, 0.23, t_dark,
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.245, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3, k2_light=None)
         return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
                                sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
@@ -269,44 +284,13 @@ print("\n" + "=" * 80)
 print("Creating plots...")
 print("=" * 80)
 
-# Plot 1: Control and Magnet
-print("\nCreating Plot 1: Control and Magnet...")
-fig1, ax1 = plt.subplots(figsize=(14, 8))
-
-control_magnet_datasets = ['LHCII Control', 'LHCII Magnet']
-colors_cm = {'LHCII Control': 'C0', 'LHCII Magnet': 'C1'}
-
-for display_name in control_magnet_datasets:
-    if display_name in all_data:
-        data = all_data[display_name]
-        color = colors_cm[display_name]
-        # Plot experimental data
-        ax1.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
-                markersize=3, linewidth=1.5, alpha=0.2)
-        # Plot model fit
-        if data['model'] is not None:
-            ax1.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
-                    linewidth=2.5, alpha=0.9)
-
-ax1.set_xlabel('Time (s)', fontsize=12)
-ax1.set_ylabel('Normalized photon count', fontsize=12)
-ax1.set_title('Control and Magnet Comparison', fontsize=14, fontweight='bold')
-ax1.legend(fontsize=10, loc='best')
-ax1.grid(True, alpha=0.3)
-plt.tight_layout()
-
-# Save plot 1
-plot_file1 = os.path.join(base_dir, 'control_magnet_comparison.png')
-plt.savefig(plot_file1, dpi=300, bbox_inches='tight')
-print(f"Plot 1 saved to: {plot_file1}")
-plt.close(fig1)
 
 # Plot 2: Control with GCO Control, MV, and SOD
 print("\nCreating Plot 2: Control with Treatment Datasets...")
-fig2, ax2 = plt.subplots(figsize=(14, 8))
+fig2, ax2 = plt.subplots(figsize=(90/25.4, 60/25.4))
 
-control_treatment_datasets = ['LHCII Control', 'LHCII GCO Control', 'LHCII MV', 'LHCII SOD']
-colors_ct = {'LHCII Control': 'C0', 'LHCII GCO Control': 'C1', 'LHCII MV': 'C2', 'LHCII SOD': 'C3'}
+control_treatment_datasets = ['Ambient air', 'Oxygen scavengers']
+colors_ct = {'Ambient air': 'C0', 'Oxygen scavengers': 'C1'}
 
 for display_name in control_treatment_datasets:
     if display_name in all_data:
@@ -315,87 +299,130 @@ for display_name in control_treatment_datasets:
         #     data['model'] = None
         color = colors_ct[display_name]
         # Plot experimental data
-        ax2.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
-                markersize=3, linewidth=1.5, alpha=0.2)
+        ax2.plot(data['time'], data['data'], '.', color=color, alpha=0.2, markersize=1)
         # Plot model fit
         if data['model'] is not None:
-            ax2.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
-                    linewidth=2.5, alpha=0.9)
+            ax2.plot(data['time'], data['model'], '-', color=color, label=f'{display_name}',
+                    alpha=1, markersize=1)
 
-ax2.set_xlabel('Time (s)', fontsize=12)
-ax2.set_ylabel('Normalized photon count', fontsize=12)
-ax2.set_title('Control and Treatment Comparison', fontsize=14, fontweight='bold')
-ax2.legend(fontsize=9, loc='best', ncol=2)
-ax2.grid(True, alpha=0.3)
+# Control
+onlen = 2.5
+offlen = 30
+
+t_dark = onlen
+t_light = t_dark + offlen
+t_dark2 = t_light + onlen
+t_light2 = t_dark2 + offlen
+t_dark3 = t_light2 + onlen
+
+phases = [
+    (0, t_dark, 'white'),
+    (t_dark, t_light, 'C0'),
+    (t_light, t_dark2, 'white'),
+    (t_dark2, t_light2, 'C0'),
+    (t_light2, t_dark3, 'white'),
+    (t_dark3, t_plot[-1], 'C0')
+]
+
+for start, end, color in phases:
+    ax2.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
+               edgecolor='black', linewidth=0.5, transform=ax2.get_xaxis_transform())
+
+# GCO
+onlen = 5
+
+t_dark = onlen
+t_light = t_dark + offlen
+t_dark2 = t_light + onlen
+t_light2 = t_dark2 + offlen
+t_dark3 = t_light2 + onlen
+
+phases = [
+    (0, t_dark, 'white'),
+    (t_dark, t_light, 'C1'),
+    (t_light, t_dark2, 'white'),
+    (t_dark2, t_light2, 'C1'),
+    (t_light2, t_dark3, 'white'),
+    (t_dark3, t_plot[-1], 'C1')
+]
+
+for start, end, color in phases:
+    ax2.axvspan(start, end, ymin=0.92, ymax=0.96, facecolor=color,
+                edgecolor='black', linewidth=0.5, transform=ax2.get_xaxis_transform())
+
+ax2.set_xlabel('Time (s)')
+ax2.set_ylabel('Normalized fluorescence')
+ax2.legend(loc='upper right', frameon=False, bbox_to_anchor=(1, 0.93))
+ax2.set_xlim(0, 90)
+# sns.despine()
 plt.tight_layout()
 
 # Save plot 2
-plot_file2 = os.path.join(base_dir, 'control_treatment_comparison.png')
-plt.savefig(plot_file2, dpi=300, bbox_inches='tight')
-print(f"Plot 2 saved to: {plot_file2}")
-plt.close(fig2)
+# plot_file2 = os.path.join(base_dir, 'control_treatment_comparison.png')
+# plt.savefig(plot_file2, dpi=300, bbox_inches='tight')
+# print(f"Plot 2 saved to: {plot_file2}")
+plt.show()
 
 # Analyze covariance matrices for all datasets
-print("\n" + "=" * 80)
-print("Covariance Matrix Analysis - Parameter Correlations")
-print("=" * 80)
-
-param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
-
-all_corr_matrices = {}
-
-for display_name, pcov in covariance_data.items():
-    if pcov is not None and np.all(np.isfinite(pcov)):
-        print(f"\n{display_name}:")
-        corr_matrix = analyze_covariance(pcov, param_names)
-        all_corr_matrices[display_name] = corr_matrix
-    else:
-        print(f"\n{display_name}: No valid covariance data available")
-
-# Create heatmaps of correlation matrices
-print("\n" + "=" * 80)
-print("Creating correlation heatmaps...")
-print("=" * 80)
-
-# Create subplots for each dataset's correlation matrix
-n_datasets = len(all_corr_matrices)
-n_cols = min(3, n_datasets)  # max 3 columns
-n_rows = (n_datasets + n_cols - 1) // n_cols
-
-if n_datasets > 0:
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
-    if n_rows == 1 and n_cols == 1:
-        axes = np.array([[axes]])
-    elif n_rows == 1 or n_cols == 1:
-        axes = axes.reshape(n_rows, n_cols)
-
-    axes = axes.flatten()  # flatten for easier iteration
-
-    for idx, (display_name, corr_matrix) in enumerate(all_corr_matrices.items()):
-        ax = axes[idx]
-
-        # Create heatmap
-        sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0,
-                   vmin=-1, vmax=1, square=True, ax=ax, cbar_kws={'label': 'Correlation'},
-                   xticklabels=param_names, yticklabels=param_names,
-                   linewidths=0.5, linecolor='gray')
-        ax.set_title(f'{display_name}', fontsize=12, fontweight='bold')
-
-    # Hide unused subplots
-    for idx in range(n_datasets, len(axes)):
-        axes[idx].set_visible(False)
-
-    plt.tight_layout()
-
-    # Save the figure
-    corr_plot_file = os.path.join(base_dir, 'correlation_matrices.png')
-    plt.savefig(corr_plot_file, dpi=300, bbox_inches='tight')
-    print(f"Correlation heatmaps saved to: {corr_plot_file}")
-    plt.close(fig)
-
-print("\nCovariance analysis complete!")
-
-
-
-
-
+# print("\n" + "=" * 80)
+# print("Covariance Matrix Analysis - Parameter Correlations")
+# print("=" * 80)
+#
+# param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
+#
+# all_corr_matrices = {}
+#
+# for display_name, pcov in covariance_data.items():
+#     if pcov is not None and np.all(np.isfinite(pcov)):
+#         print(f"\n{display_name}:")
+#         corr_matrix = analyze_covariance(pcov, param_names)
+#         all_corr_matrices[display_name] = corr_matrix
+#     else:
+#         print(f"\n{display_name}: No valid covariance data available")
+#
+# # Create heatmaps of correlation matrices
+# print("\n" + "=" * 80)
+# print("Creating correlation heatmaps...")
+# print("=" * 80)
+#
+# # Create subplots for each dataset's correlation matrix
+# n_datasets = len(all_corr_matrices)
+# n_cols = min(3, n_datasets)  # max 3 columns
+# n_rows = (n_datasets + n_cols - 1) // n_cols
+#
+# if n_datasets > 0:
+#     fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
+#     if n_rows == 1 and n_cols == 1:
+#         axes = np.array([[axes]])
+#     elif n_rows == 1 or n_cols == 1:
+#         axes = axes.reshape(n_rows, n_cols)
+#
+#     axes = axes.flatten()  # flatten for easier iteration
+#
+#     for idx, (display_name, corr_matrix) in enumerate(all_corr_matrices.items()):
+#         ax = axes[idx]
+#
+#         # Create heatmap
+#         sns.heatmap(corr_matrix, annot=True, fmt='.2f', cmap='coolwarm', center=0,
+#                    vmin=-1, vmax=1, square=True, ax=ax, cbar_kws={'label': 'Correlation'},
+#                    xticklabels=param_names, yticklabels=param_names,
+#                    linewidths=0.5, linecolor='gray')
+#         ax.set_title(f'{display_name}', fontsize=12, fontweight='bold')
+#
+#     # Hide unused subplots
+#     for idx in range(n_datasets, len(axes)):
+#         axes[idx].set_visible(False)
+#
+#     plt.tight_layout()
+#
+#     # Save the figure
+#     corr_plot_file = os.path.join(base_dir, 'correlation_matrices.png')
+#     plt.savefig(corr_plot_file, dpi=300, bbox_inches='tight')
+#     print(f"Correlation heatmaps saved to: {corr_plot_file}")
+#     plt.close(fig)
+#
+# print("\nCovariance analysis complete!")
+#
+#
+#
+#
