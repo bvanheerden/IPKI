@@ -1,35 +1,19 @@
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(project_root)
+import utils
 import pandas as pd
 import numpy as np
-import seaborn as sns
 from matplotlib import pyplot as plt
 
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
+utils.setup_plotting()
 
-sns.set_palette('deep')
-
-datadir = 'blinking/'
+datadir = os.path.join(project_root, 'blinking/DHE/')
 
 
 def loadspec(filename, existing_df, run):
-    # filename = datadir + 'SOSG Test 7_' + filename
-    filename = datadir + 'DHE/' + filename
-    new_data = pd.read_csv(filename, names=['Wavelength (nm)', 'Intensity (counts)'], usecols=[0, 1], dtype=np.float64,
-                           skiprows=36)
-    new_data['run'] = run
-    return pd.concat([existing_df, new_data], ignore_index=True)
+    return utils.load_spectrum(filename, datadir, existing_df, run)
 
 dataset = 'Low power'
 
@@ -63,7 +47,7 @@ norm_fluo_SOD = four_fluo# - zero_fluo
 
 # sns.set_context('notebook', font_scale=1, rc={"lines.linewidth": 3})
 # fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True, figsize=(15, 5))
-fig, ax1 = plt.subplots(1, 1, sharey=True, figsize=(90/25.4, 60/25.4))
+fig, ax1 = plt.subplots(1, 1, sharey=True, figsize=utils.get_figure_size(90, 60))
 # sns.lineplot(DHE[DHE['run']=='0'], x='Wavelength (nm)', y='Intensity (counts)', label='0 min', ax=ax1)
 # sns.lineplot(DHE[DHE['run']=='4'], x='Wavelength (nm)', y='Intensity (counts)', label='DHE+LHCII 4 min', ax=ax1)
 # sns.lineplot(DHE_SOD[DHE_SOD['run'] == '4'], x='Wavelength (nm)', y='Intensity (counts)', label='DHE+LHCII+SOD 4 min', ax=ax1)

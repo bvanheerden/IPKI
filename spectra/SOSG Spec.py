@@ -1,33 +1,20 @@
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(project_root)
+import utils
 import pandas as pd
 import numpy as np
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
+utils.setup_plotting()
 
-datadir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/SOSG/'
+datadir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/SOSG/SOSG export/'
 
 
 def loadspec(filename, existing_df, run):
-    # filename = datadir + 'SOSG Test 7_' + filename
-    filename = datadir + 'SOSG export/' + filename
-    new_data = pd.read_csv(filename, names=['Wavelength (nm)', 'Intensity (counts)'], usecols=[0, 1], dtype=np.float64,
-                           skiprows=36)
-    new_data['run'] = run
-    return pd.concat([existing_df, new_data], ignore_index=True)
+    return utils.load_spectrum(filename, datadir, existing_df, run)
 
 # dataset = ''
 # dataset = ' lower power'
