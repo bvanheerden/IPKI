@@ -1,60 +1,29 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils and kinetic_models
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import re
 import numpy as np
-import os
-import json
 import pickle
 import pandas as pd
 from scipy.optimize import curve_fit, differential_evolution
 from matplotlib import pyplot as plt
-
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
 import seaborn as sns
-import kinetic_model
 
-sns.set_palette("deep")
+import utils
+from kinetic_models import kinetic_model
+
+utils.setup_plotting()
 
 # Data directory - adjust as needed
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
 
 pickle_file = os.path.join(base_data_dir, 'processed_data.pkl')
 
-def load_config(folder_path):
-    config_file = os.path.join(folder_path, 'config.json')
-    params = {
-        'partlist': [0, 1, 2],
-        'p0': [1 / 20, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5],
-        'onlen': 50,
-        'offlen': 200,
-        'startind': 6,
-        'low_value_threshold': 0.1
-    }
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                params.update(json.load(f))
-        except Exception as e:
-            print(f"  Warning: Could not load config: {e}")
-    return params
 
 def prepare_data():
     if os.path.exists(pickle_file):
@@ -77,7 +46,14 @@ def prepare_data():
         h5_files = [f for f in os.listdir(folder_path) if f.startswith('measurement') and f.endswith('.h5')]
         if not h5_files: continue
         
-        params = load_config(folder_path)
+        params = utils.load_config(folder_path, {
+            'partlist': [0, 1, 2],
+            'p0': [1 / 20, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5],
+            'onlen': 50,
+            'offlen': 200,
+            'startind': 6,
+            'low_value_threshold': 0.1
+        })
         has_aa = folder_name.endswith('AA')
         power_match = re.search(r"(\d+(\.\d+)?)", folder_name)
         power_val = float(power_match.group(1)) if power_match else 0.0

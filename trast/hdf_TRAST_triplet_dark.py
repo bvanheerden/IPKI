@@ -1,34 +1,21 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.ndimage import uniform_filter1d
 from matplotlib import pyplot as plt
 import matplotlib as mpl
 import h5py
-import os
 import re
+import utils
 
-# Enable LaTeX rendering
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
+utils.setup_plotting()
 
 mpl.rcParams['savefig.dpi'] = 300
 

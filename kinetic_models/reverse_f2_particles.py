@@ -1,12 +1,12 @@
 import sys
 import os
+
+# Add the project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import h5py
-import os
 import re
 
 def reverse_particles(input_path, output_path):

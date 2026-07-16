@@ -1,32 +1,21 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils and other modules
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import numpy as np
 import h5py
 from matplotlib import pyplot as plt
-
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
-import os
 from scipy.optimize import curve_fit
 import pandas as pd
-import kinetic_model
+
+import utils
+from kinetic_models import kinetic_model
+
+utils.setup_plotting()
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
 # dataset_folder = 'LHCII GCO Control'

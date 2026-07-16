@@ -1,10 +1,10 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports from there
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 import numpy as np
 import h5py
 import os
@@ -18,6 +18,27 @@ def kinetic(t, y, k1, k2, k3, k4):
                   [0, -k2, 0, k1],  # Quenched
                   [0, 0, -k4, 0],  # UnQuenched 2
                   [0,  k2, 0, -k1-k3]])  # Unquenched
+    return K @ y
+
+
+def kinetic_2q(t, y, k1, kr1, kr2, k3, k4, f):
+    """
+    States:
+    0 : Bleached
+    1 : Q1
+    2 : Q2
+    3 : Unquenched2
+    4 : Unquenched
+    """
+
+    K = np.array([
+        [0,        0,      0,      k4,        k3],
+        [0,    -kr1,      0,       0,    f*k1],
+        [0,        0,  -kr2,       0, (1-f)*k1],
+        [0,        0,      0,     -k4,       0],
+        [0,     kr1,    kr2,       0,    -k1-k3]
+    ])
+
     return K @ y
 
 
@@ -103,6 +124,45 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
     sol5 = solve_expm(M_light, sol4.y[:, -1], t_dark3 - t_light2 + 1)
     sol6 = solve_expm(M_dark, sol5.y[:, -1], len(t) - 1 - t_dark3)
     
+    return sol1, sol2, sol3, sol4, sol5, sol6
+
+def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3,
+                 debug=False):
+    """
+    Model function for the 2-quenched-state kinetic model across multiple phases.
+    """
+    q0 = q_sum * q_fraction
+    q1 = q_sum * (1 - q_fraction)
+    # y0: [Bleached, Q1, Q2, Unquenched2, Unquenched]
+    y0 = np.array([0, 0, 0, q0, q1])
+
+    K_light = np.array([
+        [0,    0,    0,    k4,    k3],
+        [0, -kr1,    0,     0,  f*k1],
+        [0,    0, -kr2,     0, (1-f)*k1],
+        [0,    0,    0,   -k4,     0],
+        [0,  kr1,  kr2,     0, -k1-k3]
+    ])
+
+    K_dark = np.array([
+        [0,    0,    0,    0,    0],
+        [0, -kr1,    0,     0,    0],
+        [0,    0, -kr2,     0,    0],
+        [0,    0,    0,    0,    0],
+        [0,  kr1,  kr2,     0,    0]
+    ])
+
+    dt = t[1] - t[0]
+    M_light = scipy.linalg.expm(K_light * dt)
+    M_dark = scipy.linalg.expm(K_dark * dt)
+
+    sol1 = solve_expm(M_light, y0, t_dark + 1)
+    sol2 = solve_expm(M_dark, sol1.y[:, -1], t_light - t_dark + 1)
+    sol3 = solve_expm(M_light, sol2.y[:, -1], t_dark2 - t_light + 1)
+    sol4 = solve_expm(M_dark, sol3.y[:, -1], t_light2 - t_dark2 + 1)
+    sol5 = solve_expm(M_light, sol4.y[:, -1], t_dark3 - t_light2 + 1)
+    sol6 = solve_expm(M_dark, sol5.y[:, -1], len(t) - 1 - t_dark3)
+
     return sol1, sol2, sol3, sol4, sol5, sol6
 
 def onetrace(data_dir, partnum, startind=0, low_value_threshold=None):

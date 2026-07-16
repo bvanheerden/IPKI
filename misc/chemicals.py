@@ -10,26 +10,12 @@ import os
 from scipy.optimize import curve_fit
 import pandas as pd
 import seaborn as sns
-import kinetic_model
+from kinetic_models import kinetic_model
 import h5py
 from matplotlib import pyplot as plt
+import utils
 
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
-
-sns.set_palette('deep')
+utils.setup_plotting()
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
 
@@ -41,7 +27,7 @@ datasets = {
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
+default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 0.5, 1.0, 0.5]
 
 # Global defaults; these can be overridden per-dataset by a params.json or params.txt
 default_startind = 1
@@ -100,11 +86,11 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.245, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=None)
-        return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
-                               sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
+    def fitfunc(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, 1, q_fraction, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3)
+        return np.concatenate((sol1.y[3]+sol1.y[4], sol2.y[3][1:]+sol2.y[4][1:], sol3.y[3][1:]+sol3.y[4][1:],
+                               sol4.y[3][1:]+sol4.y[4][1:], sol5.y[3][1:]+sol5.y[4][1:], sol6.y[3][1:]+sol6.y[4][1:]))
 
 
     if onlyplot:
@@ -112,20 +98,21 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         pcov = None
     else:
         # noinspection PyTupleAssignmentBalance
-        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0],
-                                                                       [10, 10, 10, 10, 10, 2, 1]), verbose=2)
+        # Parameters: k1, kr1, kr2, k3, k4, f, q_sum, q_fraction
+        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0, 0],
+                                                                       [10, 10, 10, 10, 10, 1, 2, 1]), verbose=2)
 
-    tau = [1 / popt[i] for i in range(5)]
-    q_sum = popt[5]
-    q_fraction = popt[6]
+    tau = [1 / popt[i] if popt[i] != 0 else np.nan for i in range(5)]
+    q_sum = popt[6]
+    q_fraction = popt[7]
 
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
         perr = np.sqrt(np.diag(pcov))
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
-        q_sum_err = perr[5]
-        q_fraction_err = perr[6]
+        q_sum_err = perr[6]
+        q_fraction_err = perr[7]
     else:
         perr = [np.nan] * len(popt)
         tau_err = [np.nan] * 5
@@ -133,10 +120,11 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         q_fraction_err = np.nan
 
     print(f'Tau1 = {tau[0]:.2g} ± {tau_err[0]:.2g} s')
-    print(f'Tau2 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
-    # print(f'Tau2_light = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
+    print(f'Tau_r1 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
+    print(f'Tau_r2 = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
     print(f'Tau3 = {tau[3]:.2g} ± {tau_err[3]:.2g} s')
     print(f'Tau4 = {tau[4]:.2g} ± {tau_err[4]:.2g} s')
+    print(f'f = {popt[5]:.2g} ± {perr[5]:.2g}')
     print(f'Q_sum = {q_sum:.2g} ± {q_sum_err:.2g} cps')
     print(f'Q_fraction = {q_fraction:.2g} ± {q_fraction_err:.2g}')
 
@@ -144,7 +132,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
+        model = fitfunc(t_plot, *popt)
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
     return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov
@@ -161,7 +149,7 @@ def analyze_covariance(pcov, param_names=None):
         corr_matrix: Correlation coefficient matrix
     """
     if param_names is None:
-        param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
+        param_names = ['k1', 'kr1', 'kr2', 'k3', 'k4', 'f', 'q_sum', 'q_fraction']
 
     # Convert covariance to correlation matrix
     # corr[i,j] = cov[i,j] / (std[i] * std[j])
@@ -248,10 +236,11 @@ for display_name, folder_name in datasets.items():
         results.append({
             'Dataset': display_name,
             'Tau1 (s)': fmt_val_err(tau_list[0], tau_err_list[0]),
-            'Tau2 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
-            # 'Tau2_light (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
+            'Tau_r1 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
+            'Tau_r2 (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
             'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
             'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
+            'f': fmt_val_err(popt[5], perr[5]),
             'Q_sum': fmt_val_err(q_sum, q_sum_err),
             'Q_fraction': fmt_val_err(q_fraction, q_fraction_err)
         })

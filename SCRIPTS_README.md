@@ -10,6 +10,8 @@ This project has been reorganized to improve maintainability and reduce code dup
 - `kinetic_models/`: Core kinetic models and scripts for fitting them to experimental data.
 - `misc/`: Miscellaneous utility scripts and experiments.
 - `blinking/`: Experimental data directory.
+- `notebooks/`: Jupyter notebooks for exploratory analysis and visualization.
+- `results/`: Processed data files (.pkl), plots (.png), and CSV results.
 
 ## Centralized Utilities (`utils.py`)
 

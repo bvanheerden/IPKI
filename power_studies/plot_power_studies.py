@@ -1,35 +1,21 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import pickle
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 import matplotlib.ticker as mticker
 import seaborn as sns
-import os
 
-# Enable LaTeX rendering globally
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
+import utils
 
-sns.set_palette("deep")
+utils.setup_plotting()
 
 def get_numeric(series):
     if series.dtype == 'O':
@@ -44,30 +30,34 @@ def get_error(series):
     return pd.Series(0.0, index=series.index)
 
 # Load data
-use_csv = os.path.exists('local_analysis_results.csv')
+results_dir = os.path.join(project_root, 'results')
+use_csv = os.path.exists(os.path.join(results_dir, 'local_analysis_results.csv'))
 
 df_no_aa = pd.DataFrame()
 df_with_aa = pd.DataFrame()
 
 if use_csv:
-    print("Loading data from local_analysis_results.csv")
-    df_all = pd.read_csv('local_analysis_results.csv')
+    csv_path = os.path.join(results_dir, 'local_analysis_results.csv')
+    print(f"Loading data from {csv_path}")
+    df_all = pd.read_csv(csv_path)
     df_no_aa = df_all[df_all['AA'] == 'No'].copy()
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        with open('data_no_aa.pkl', 'rb') as f:
+        path = os.path.join(results_dir, 'data_no_aa.pkl')
+        with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
     except FileNotFoundError:
         df_no_aa = pd.DataFrame()
-        print("data_no_aa_k2.pkl not found")
+        print("data_no_aa.pkl not found in results/")
 
     try:
-        with open('data_with_aa.pkl', 'rb') as f:
+        path = os.path.join(results_dir, 'data_with_aa.pkl')
+        with open(path, 'rb') as f:
             df_with_aa = pickle.load(f)
     except FileNotFoundError:
         df_with_aa = pd.DataFrame()
-        print("data_with_aa_k2.pkl not found")
+        print("data_with_aa.pkl not found in results/")
 
 # Base data directory for saving plots (can be customized or loaded from data if available)
 # In the original script, it was base_data_dir. We'll use current dir or a default.

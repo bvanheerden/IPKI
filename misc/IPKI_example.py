@@ -1,15 +1,11 @@
 import sys
 import os
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import numpy as np
 import os
 from scipy.optimize import curve_fit
 import pandas as pd
-import kinetic_model
+from kinetic_models import kinetic_model
 import h5py
 from matplotlib import pyplot as plt
 import seaborn as sns
@@ -32,14 +28,14 @@ plt.rcParams.update({
 sns.set_palette('deep')
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-dataset_folder = '144 mE'
-dataset_name = '144 mE'
+dataset_folder = '301 mE'
+dataset_name = '301 mE'
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
+default_p0 = [1 / 4, 1 / 6, 1 / 10, 1 / 10, 1 / 3, 0.5, 1.0, 0.5]
 
-startind = 5
+startind = 1
 
 # Global defaults; these can be overridden per-dataset by a params.json or params.txt
 default_onlen = 50
@@ -92,42 +88,46 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=0)
-        return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
-                               sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
+    def fitfunc(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3)
+        return np.concatenate((sol1.y[3]+sol1.y[4], sol2.y[3][1:]+sol2.y[4][1:], sol3.y[3][1:]+sol3.y[4][1:],
+                               sol4.y[3][1:]+sol4.y[4][1:], sol5.y[3][1:]+sol5.y[4][1:], sol6.y[3][1:]+sol6.y[4][1:]))
 
 
     if onlyplot:
         popt = p0
         pcov = None
     else:
-        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 1, 0],
-                                                                       [10, 10, 10, 10, 10, 2, 1]), verbose=2)
+        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0.1, 0],
+                                                                       [10, 10, 10, 10, 10, 1, 10, 1]), verbose=2)
 
     tau = [1 / popt[i] for i in range(5)]
-    q_sum = popt[5]
-    q_fraction = popt[6]
+    f_param = popt[5]
+    q_sum = popt[6]
+    q_fraction = popt[7]
 
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
         perr = np.sqrt(np.diag(pcov))
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
-        q_sum_err = perr[5]
-        q_fraction_err = perr[6]
+        f_err = perr[5]
+        q_sum_err = perr[6]
+        q_fraction_err = perr[7]
     else:
         perr = [np.nan] * len(popt)
         tau_err = [np.nan] * 5
+        f_err = np.nan
         q_sum_err = np.nan
         q_fraction_err = np.nan
 
     print(f'Tau1 = {tau[0]:.2f} ± {tau_err[0]:.2f} s')
-    print(f'Tau2 = {tau[1]:.2f} ± {tau_err[1]:.2f} s')
-    print(f'Tau2_light = {tau[2]:.2f} ± {tau_err[2]:.2f} s')
+    print(f'Taur1 = {tau[1]:.2f} ± {tau_err[1]:.2f} s')
+    print(f'Taur2 = {tau[2]:.2f} ± {tau_err[2]:.2f} s')
     print(f'Tau3 = {tau[3]:.2f} ± {tau_err[3]:.2f} s')
     print(f'Tau4 = {tau[4]:.2f} ± {tau_err[4]:.2f} s')
+    print(f'f = {f_param:.2f} ± {f_err:.2f}')
     print(f'Q_sum = {q_sum:.2f} ± {q_sum_err:.2f} cps')
     print(f'Q_fraction = {q_fraction:.2f} ± {q_fraction_err:.2f}')
 
@@ -135,7 +135,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
+        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7])
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
     return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, 
@@ -170,7 +170,7 @@ try:
 
     # Create plot
     print("\nCreating plot...")
-    fig, ax = plt.subplots(figsize=(90/25.4, 60/25.4))
+    fig, ax = plt.subplots(figsize=(90/25.4, 50/25.4))
 
     # Add light/dark bar at the top
     # Phases: [0, t_dark] Light, [t_dark, t_light] Dark, [t_light, t_dark2] Light, ...
@@ -189,16 +189,15 @@ try:
 
     # Plot model fit
     if model is not None:
-        ax.plot(t_plot, model, '-', color='C3', label=f'{dataset_name} (fit)',
-                alpha=1)
+        ax.plot(t_plot, model, '-', color='C3', label=f'{dataset_name} (fit)', lw=1)
 
     for start, end, color in phases:
         ax.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
                    edgecolor='black', linewidth=0.5, transform=ax.get_xaxis_transform())
 
     ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Normalized photon count')
-    ax.set_xlim(0, 100)
+    ax.set_ylabel('Normalized fluorescence')
+    ax.set_xlim(0, 90)
     plt.tight_layout()
 
     # Save plot

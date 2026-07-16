@@ -1,11 +1,40 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Add the project root (where this file is located) to sys.path
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
 import os
+
+import json
+
+def load_config(folder_path, default_params=None):
+    """
+    Load configuration from config.json in the folder.
+    
+    Args:
+        folder_path: Path to the folder containing config.json.
+        default_params: Dictionary with default parameters.
+        
+    Returns:
+        Dictionary with parameters.
+    """
+    config_file = os.path.join(folder_path, 'config.json')
+    params = default_params.copy() if default_params else {}
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r') as f:
+                loaded_config = json.load(f)
+                params.update(loaded_config)
+            print(f"  Loaded config from {config_file}")
+        except Exception as e:
+            print(f"  Warning: Could not load config file: {str(e)}")
+    return params
 
 def setup_plotting():
     """Sets up global plotting parameters for consistency."""
@@ -22,6 +51,7 @@ def setup_plotting():
         'axes.labelsize': 7,
         'xtick.labelsize': 7,
         'legend.fontsize': 7,
+        'savefig.directory': '/home/bertus/Documents/Postdoc/Suurstofprojek/'
     })
     sns.set_palette('deep')
 

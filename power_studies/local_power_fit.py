@@ -1,38 +1,24 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils and kinetic_models
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import re
 import numpy as np
-import os
 import json
-from scipy.optimize import curve_fit
+import pickle
 import pandas as pd
+from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
 import seaborn as sns
-import kinetic_model
-import pickle
 
-sns.set_palette("deep")
+import utils
+from kinetic_models import kinetic_model
 
-# Enable LaTeX rendering globally
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
+utils.setup_plotting()
 
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
 
@@ -52,24 +38,6 @@ load_saved_data = False  # Set to True to skip fitting and load from CSV
 use_pickle = True  # Set to True to save/load processed traces
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 
-def load_config(folder_path):
-    """Load configuration from config.json in the folder, return dict with parameters."""
-    config_file = os.path.join(folder_path, 'config.json')
-    params = default_params.copy()
-
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                loaded_config = json.load(f)
-                params.update(loaded_config)
-            print(f"  Loaded config from {config_file}")
-        except Exception as e:
-            print(f"  Warning: Could not load config file: {str(e)}")
-            print(f"  Using default parameters")
-    else:
-        print(f"  No config file found, using default parameters")
-
-    return params
 
 # Loop through all power folders and collect results
 output_file = os.path.join(base_data_dir, 'local_analysis_results.csv')
@@ -105,7 +73,7 @@ else:
             if not h5_files:
                 continue
         
-            params = load_config(folder_path)
+            params = utils.load_config(folder_path, default_params)
             partlist = params['partlist']
             onlen = params['onlen']
             offlen = params['offlen']

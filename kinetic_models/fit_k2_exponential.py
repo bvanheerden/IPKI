@@ -1,31 +1,20 @@
 import sys
 import os
+
+# Add the project root to sys.path to allow imports of utils and kinetic_models
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 import numpy as np
-import os
 import json
 import matplotlib.pyplot as plt
-
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
 from scipy.optimize import curve_fit
-import kinetic_model
+
+import utils
+from kinetic_models import kinetic_model
+
+utils.setup_plotting()
 
 # Select one dataset
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
@@ -45,15 +34,8 @@ default_params = {
     'low_value_threshold': 0.1
 }
 
-def load_config(folder_path):
-    config_file = os.path.join(folder_path, 'config.json')
-    params = default_params.copy()
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            params.update(json.load(f))
-    return params
 
-params = load_config(data_dir)
+params = utils.load_config(data_dir, default_params)
 partnums = params['partlist']
 onlen = params['onlen']
 offlen = params['offlen']
