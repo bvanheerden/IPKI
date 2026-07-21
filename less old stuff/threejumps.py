@@ -8,8 +8,8 @@ import os
 from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
 
-# data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek'
-data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\27 May 2026'
+data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/27 May 2026'
+# data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\27 May 2026'
 
 timestep = 0.05  # time step of intensity trace in seconds
 p0 = [1 / 4, 1 / 6, 1 / 10, 1 / 3, 0.5]
@@ -158,7 +158,7 @@ def fittrace(dataset, partnums):
 #                                                                                    12, 13, 14, 15, 16, 17, 18, 19, 20])
 # norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
                                                                           # 12, 13, 14, 15, 16, 17, 18, 19, 20])
-norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [14, 15, 16])
+norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [11, 12, 13, 14, 15, 16])
 # norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 4, 7, 8, 9, 10])
 if not onlyplot:
     plt.plot(t_225, norm_pulsephotons_225[:], '--', color='gray')

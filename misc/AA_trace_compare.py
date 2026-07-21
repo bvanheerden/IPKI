@@ -2,16 +2,11 @@ import sys
 import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import utils
 import numpy as np
 import os
 from scipy.optimize import curve_fit
-import pandas as pd
-import kinetic_model
-import h5py
+from kinetic_models import kinetic_model
 from matplotlib import pyplot as plt
 import seaborn as sns
 
@@ -68,7 +63,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     else:
         norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
-    datapoints = len(norm_pulsephotons) + 1
+    datapoints = len(norm_pulsephotons)
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
 
@@ -126,13 +121,13 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
         model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, 
+    return (norm_pulsephotons, model, t_plot, tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err,
             popt, perr, (t_dark, t_light, t_dark2, t_light2, t_dark3), timestep)
 
 
 # Create plot
 print("\nCreating plot...")
-fig, ax = plt.subplots(figsize=utils.get_figure_size(90, 60))
+fig, ax = plt.subplots(figsize=utils.get_figure_size(90, 50))
 
 for ds in datasets:
     dataset_name = ds['label']
@@ -191,11 +186,12 @@ for start, end, color in phases:
     ax.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
                edgecolor='black', linewidth=0.5, transform=ax.get_xaxis_transform())
 
+plt.legend(loc='upper right', bbox_to_anchor=(1, 0.95), frameon=False)
 ax.set_xlabel('Time (s)')
-ax.set_ylabel('Normalized photon count')
+ax.set_ylabel('Normalized fluorescence (a.u.)')
 ax.set_xlim(0, 50)
-ax.text(45, 0.55, '-AA', color='C0')
-ax.text(45, 0.8, '+AA', color='C1')
+# ax.text(45, 0.55, '-AA', color='C0')
+# ax.text(45, 0.8, '+AA', color='C1')
 plt.tight_layout()
 
 # Save plot

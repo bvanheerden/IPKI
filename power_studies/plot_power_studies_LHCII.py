@@ -78,7 +78,7 @@ except FileNotFoundError:
     print("data_with_aa_lhcii.pkl not found in results/")
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa.pkl')
+    path = os.path.join(results_dir, '../results/data_no_aa.pkl')
     with open(path, 'rb') as f:
         df_thylakoid_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -281,11 +281,16 @@ if not df_no_aa.empty:
     # Plot K2_light (no AA)
     k2a_no_aa_series = get_numeric(df_no_aa['Kr1 (s⁻¹)'])
     k2a_no_aa = k2a_no_aa_series.iloc[0] if not k2a_no_aa_series.empty else 0.0
-    ax1.axhline(k2a_no_aa, color='C3', linestyle='--', label=r'$k_{2a}$')
+    # ax1.axhline(k2a_no_aa, color='C3', linestyle='--', label=r'$k_{2a}$')
 
     k2b_no_aa_series = get_numeric(df_no_aa['Kr2 (s⁻¹)'])
     k2b_no_aa = k2b_no_aa_series.iloc[0] if not k2b_no_aa_series.empty else 0.0
-    ax1.axhline(k2b_no_aa, color='C4', linestyle='--', label=r'$k_{2b}$')
+    # ax1.axhline(k2b_no_aa, color='C4', linestyle='--', label=r'$k_{2b}$')
+    f_no_aa_series = get_numeric(df_no_aa['f'])
+    f_no_aa = f_no_aa_series.iloc[0] if not f_no_aa_series.empty else 0.0
+    k2_av = 1 / (f_no_aa / k2a_no_aa + (1-f_no_aa) / k2b_no_aa)
+    ax1.axhline(k2_av, color='C3', linestyle='--', label=r'$k_2$')
+
     # k2l_no_aa = get_numeric(df_no_aa['K2_light (s⁻¹)'])
     # k2_plot = ax1.errorbar(x_no_aa, k2l_no_aa + k2_no_aa,
     #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s', label=r'$k_{2}$',
@@ -340,12 +345,11 @@ if not df_no_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker='^', color='C1', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C3', label=r'$k_{2a}$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
+        Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C4', label=r'$k_{2b}$', linestyle='--', markersize=4),
     ]
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=3)#, bbox_to_anchor=(0, 0.95))
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=2)#, bbox_to_anchor=(0, 0.95))
 
     sns.despine()
     plt.tight_layout()

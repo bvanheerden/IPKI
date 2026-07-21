@@ -49,14 +49,8 @@ class Result:
 
 def solve_expm(M, y0, n):
     """Solve linear ODE system using matrix exponential properties."""
-    # if n <= 0:
-    #     return Result(np.zeros((len(y0), 1)) if len(y0) > 0 else np.zeros((0, 1)))
-    
-    # Ensure y0 has the correct shape for broadcasting if n=1
-    # but the code below handles it via np.arange(n)
-    
-    # if n == 1:
-    #     return Result(y0.reshape(-1, 1))
+    if n <= 0:
+        return Result(y0.reshape(-1, 1)[:, :0])
     
     # y(j) = M^j * y0
     # To avoid repeated matrix multiplications, we use the property:
@@ -93,10 +87,10 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
     """
     kl1 = k2 + k2_light if k2_light is not None else k2
 
-    q0 = q_sum * q_fraction
-    q1 = q_sum * (1 - q_fraction)
+    q0 = 1 * q_fraction
+    q1 = 1 * (1 - q_fraction)
     y0 = np.array([0, 0, q0, q1])
-    
+
     # Light/Dark Phase Matrix Definitions
     K_light = np.array([[0,  0,  k4,  k3],  # Bleached
                         [0, -kl1, 0, k1],  # Quenched
@@ -112,17 +106,22 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
     M_light = scipy.linalg.expm(K_light * dt)
     M_dark = scipy.linalg.expm(K_dark * dt)
 
-    sol1 = solve_expm(M_light, y0, t_dark + 1)
-    sol2 = solve_expm(M_dark, sol1.y[:, -1], t_light - t_dark + 1)
-    sol3 = solve_expm(M_light, sol2.y[:, -1], t_dark2 - t_light + 1)
+    sol1 = solve_expm(M_light, y0, max(0, t_dark + 1))
+    curr_y = sol1.y[:, -1] if sol1.y.shape[1] > 0 else y0
+    sol2 = solve_expm(M_dark, curr_y, max(0, t_light - t_dark + 1))
+    curr_y = sol2.y[:, -1] if sol2.y.shape[1] > 0 else curr_y
+    sol3 = solve_expm(M_light, curr_y, max(0, t_dark2 - t_light + 1))
+    curr_y = sol3.y[:, -1] if sol3.y.shape[1] > 0 else curr_y
     if debug:
         print(t_dark2, t_light)
         print(sol1.y)
         print(sol2.y)
         print(sol3.y)
-    sol4 = solve_expm(M_dark, sol3.y[:, -1], t_light2 - t_dark2 + 1)
-    sol5 = solve_expm(M_light, sol4.y[:, -1], t_dark3 - t_light2 + 1)
-    sol6 = solve_expm(M_dark, sol5.y[:, -1], len(t) - 1 - t_dark3)
+    sol4 = solve_expm(M_dark, curr_y, max(0, t_light2 - t_dark2 + 1))
+    curr_y = sol4.y[:, -1] if sol4.y.shape[1] > 0 else curr_y
+    sol5 = solve_expm(M_light, curr_y, max(0, t_dark3 - t_light2 + 1))
+    curr_y = sol5.y[:, -1] if sol5.y.shape[1] > 0 else curr_y
+    sol6 = solve_expm(M_dark, curr_y, max(0, len(t) - t_dark3))
     
     return sol1, sol2, sol3, sol4, sol5, sol6
 
@@ -131,8 +130,8 @@ def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light,
     """
     Model function for the 2-quenched-state kinetic model across multiple phases.
     """
-    q0 = q_sum * q_fraction
-    q1 = q_sum * (1 - q_fraction)
+    q0 = 1 * q_fraction
+    q1 = 1 * (1 - q_fraction)
     # y0: [Bleached, Q1, Q2, Unquenched2, Unquenched]
     y0 = np.array([0, 0, 0, q0, q1])
 
@@ -156,12 +155,17 @@ def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light,
     M_light = scipy.linalg.expm(K_light * dt)
     M_dark = scipy.linalg.expm(K_dark * dt)
 
-    sol1 = solve_expm(M_light, y0, t_dark + 1)
-    sol2 = solve_expm(M_dark, sol1.y[:, -1], t_light - t_dark + 1)
-    sol3 = solve_expm(M_light, sol2.y[:, -1], t_dark2 - t_light + 1)
-    sol4 = solve_expm(M_dark, sol3.y[:, -1], t_light2 - t_dark2 + 1)
-    sol5 = solve_expm(M_light, sol4.y[:, -1], t_dark3 - t_light2 + 1)
-    sol6 = solve_expm(M_dark, sol5.y[:, -1], len(t) - 1 - t_dark3)
+    sol1 = solve_expm(M_light, y0, max(0, t_dark + 1))
+    curr_y = sol1.y[:, -1] if sol1.y.shape[1] > 0 else y0
+    sol2 = solve_expm(M_dark, curr_y, max(0, t_light - t_dark + 1))
+    curr_y = sol2.y[:, -1] if sol2.y.shape[1] > 0 else curr_y
+    sol3 = solve_expm(M_light, curr_y, max(0, t_dark2 - t_light + 1))
+    curr_y = sol3.y[:, -1] if sol3.y.shape[1] > 0 else curr_y
+    sol4 = solve_expm(M_dark, curr_y, max(0, t_light2 - t_dark2 + 1))
+    curr_y = sol4.y[:, -1] if sol4.y.shape[1] > 0 else curr_y
+    sol5 = solve_expm(M_light, curr_y, max(0, t_dark3 - t_light2 + 1))
+    curr_y = sol5.y[:, -1] if sol5.y.shape[1] > 0 else curr_y
+    sol6 = solve_expm(M_dark, curr_y, max(0, len(t) - t_dark3))
 
     return sol1, sol2, sol3, sol4, sol5, sol6
 

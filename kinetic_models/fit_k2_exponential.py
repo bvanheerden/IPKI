@@ -21,8 +21,8 @@ utils.setup_plotting()
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
 # folder_name = '446 mE'
-# folder_name = 'LHCII SOD'
-folder_name = 'LHCII Control 301 mE'
+folder_name = 'LHCII SOD'
+# folder_name = 'LHCII Control 301 mE'
 data_dir = os.path.join(base_data_dir, folder_name)
 
 # Default parameters (from Power_studies_June2026.py)
@@ -169,11 +169,11 @@ try:
     residuals = dark_part - bi_exp_fit(t_dark, *popt)
 
     # Plotting
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(90/25.4, 40/25.4), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
     
     # Main plot
-    ax1.plot(t_dark, dark_part, 'ko', label='Experimental Data (Dark Phase)', markersize=4)
-    ax1.plot(t_dark, bi_exp_fit(t_dark, *popt), 'r-', label='Bi-exponential Fit', linewidth=2)
+    ax1.plot(t_dark, dark_part, 'ko', label='Experimental Data (Dark Phase)', markersize=1)
+    ax1.plot(t_dark, bi_exp_fit(t_dark, *popt), 'r-', label='Bi-exponential Fit', linewidth=1)
     # ax1.plot(t_dark, A1 * np.exp(-k1 * t_dark) + C, 'b--', label=f'Fast component (k1={k1:.3f})', alpha=0.5)
     # ax1.plot(t_dark, A2 * np.exp(-k2 * t_dark) + C, 'g--', label=f'Slow component (k2={k2:.3f})', alpha=0.5)
     ax1.set_ylabel('Normalized Photon Count')
@@ -182,7 +182,7 @@ try:
     ax1.grid(True, alpha=0.3)
     
     # Residuals plot
-    ax2.plot(t_dark, residuals, 'bo', markersize=4, alpha=0.7)
+    ax2.plot(t_dark, residuals, 'bo', markersize=1, alpha=0.7)
     ax2.axhline(0, color='red', linestyle='--', linewidth=1)
     ax2.set_xlabel('Time (s)')
     ax2.set_ylabel('Residuals')

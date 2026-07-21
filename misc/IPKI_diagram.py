@@ -18,8 +18,8 @@ sns.set_palette('deep')
 frequency = 20        # Frequency in Hz
 sampling_rate = 2000  # Samples per second
 duration_1 = .15         # Duration in seconds
-duration_2 = .25         # Duration in seconds
-duration_3 = .5         # Duration in seconds
+duration_2 = .20         # Duration in seconds
+duration_3 = .55         # Duration in seconds
 phase_shift = np.pi
 
 # 2. Create the time array
@@ -48,7 +48,6 @@ phases = [
     (duration_1, duration_1+duration_2, 'white'),
     (duration_1+duration_2, duration_1+duration_2+duration_3, 'black'),
     ]
-
 
 plt.figure(figsize=(90/25.4, 40/25.4))
 plt.plot(t, full_trace, color='C0', linewidth=1.5, label='Laser', alpha=0.8)

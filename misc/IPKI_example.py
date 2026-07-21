@@ -4,28 +4,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import numpy as np
 import os
 from scipy.optimize import curve_fit
-import pandas as pd
 from kinetic_models import kinetic_model
-import h5py
 from matplotlib import pyplot as plt
 import seaborn as sns
+import utils
 
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
-
-sns.set_palette('deep')
+utils.setup_plotting()
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
 dataset_folder = '301 mE'
@@ -76,8 +60,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     else:
         norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
-    datapoints = len(norm_pulsephotons) + 1
-    endpoint = datapoints * timestep
+    datapoints = len(norm_pulsephotons)
+    endpoint = (datapoints - 1) * timestep
     t = np.linspace(0, endpoint, datapoints)
 
     t_dark = onlen  # np.argmin(norm_pulsephotons[:len(norm_pulsephotons)//3])  # minimum of first third of trace
@@ -137,8 +121,8 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
     else:
         model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7])
 
-    # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, 
+    # Return normalized data, model, time base, taus and their errors
+    return (norm_pulsephotons, model, t_plot, tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, 
             popt, perr, (t_dark, t_light, t_dark2, t_light2, t_dark3), timestep)
 
 
@@ -180,7 +164,7 @@ try:
         (t_light, t_dark2, 'white'),
         (t_dark2, t_light2, 'black'),
         (t_light2, t_dark3, 'white'),
-        (t_dark3, t_plot[-1], 'black')
+        (t_dark3, t_plot[-1] if len(t_plot) > 0 else 0, 'black')
     ]
     
     # Plot experimental data

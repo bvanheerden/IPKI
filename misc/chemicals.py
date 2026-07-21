@@ -74,7 +74,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=slice(None, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
         print(timestep)
-    datapoints = len(norm_pulsephotons) + 1
+    datapoints = len(norm_pulsephotons)
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
 
@@ -135,7 +135,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         model = fitfunc(t_plot, *popt)
 
     # Return normalized data, model, time base (exclude last because model uses concatenation offsets), taus and their errors
-    return norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov
+    return norm_pulsephotons, model, t_plot, tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt, perr, pcov
 
 
 def analyze_covariance(pcov, param_names=None):
@@ -317,7 +317,7 @@ phases = [
     (t_light, t_dark2, 'white'),
     (t_dark2, t_light2, 'C0'),
     (t_light2, t_dark3, 'white'),
-    (t_dark3, t_plot[-1], 'C0')
+    (t_dark3, t_dark3+offlen, 'C0')
 ]
 
 for start, end, color in phases:
@@ -339,7 +339,7 @@ phases = [
     (t_light, t_dark2, 'white'),
     (t_dark2, t_light2, 'C1'),
     (t_light2, t_dark3, 'white'),
-    (t_dark3, t_plot[-1], 'C1')
+    (t_dark3, t_dark3+offlen, 'C1')
 ]
 
 for start, end, color in phases:

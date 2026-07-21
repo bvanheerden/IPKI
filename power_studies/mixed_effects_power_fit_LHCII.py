@@ -11,15 +11,11 @@ os.makedirs(results_dir, exist_ok=True)
 
 import re
 import numpy as np
-import h5py
-import json
 import pickle
 import pandas as pd
 from scipy.optimize import curve_fit
 from scipy.stats import median_abs_deviation
 from matplotlib import pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
 
 import utils
 from kinetic_models import kinetic_model
@@ -27,7 +23,6 @@ from kinetic_models import kinetic_model
 utils.setup_plotting()
 
 base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
 
 # Mixed-effects regularization strengths (1/sigma)
 # Higher weight = more "global" (less variation between powers)
@@ -91,6 +86,7 @@ else:
             individual_traces = [tr[startind:] for tr in individual_traces_full]
             t = np.linspace(0, (len(norm_pulsephotons) - 1) * timestep, len(norm_pulsephotons))
             
+            t_phases_len = (params['onlen'], params['offlen'], params['onlen'], params['offlen'], params['onlen'])
             all_datasets.append({
                 'power': power_val,
                 'power_str': power_str,
@@ -100,7 +96,7 @@ else:
                 'norm_pulsephotons': norm_pulsephotons,
                 'individual_traces': individual_traces,
                 'params': params,
-                't_phases': (params['onlen'], params['offlen'], params['onlen'], params['offlen'], params['onlen'])
+                't_phases': np.cumsum(t_phases_len)
             })
         except Exception as e:
             print(f"  Error processing {folder_name}: {e}")
@@ -226,9 +222,9 @@ if all_datasets:
 
         # Bounds and initial guesses
         if USE_2Q_MODEL:
-            p0_global = [0.3, 0.03, 0.5, 0.18] # Global means: kr1_mean, kr2_mean, f_mean, qf_mean
-            lower_bounds = [0, 0, 0, 0.0]
-            upper_bounds = [10, 10, 1.0, 0.5]
+            p0_global = [0.3, 1.5, 0.5, 0.18] # Global means: kr1_mean, kr2_mean, f_mean, qf_mean
+            lower_bounds = [0, 1, 0, 0.0]
+            upper_bounds = [1, 20, 1.0, 0.5]
         else:
             p0_global = [2.6 if group_name == 'AA' else 0.3, 0.18] # Global means: k2_mean, qf_mean
             lower_bounds = [0, 0.0]
@@ -241,7 +237,7 @@ if all_datasets:
                 if len(dp0) >= 8:
                     p0_global.extend(dp0[:8])
                 else:
-                    # Adapt from 4-state p0: k1, k2, k2_light, k3, k4, q_sum, q_fraction
+                    # Adapt from 4-state p0: k1, kr1, kr2, k3, k4, q_sum, q_fraction
                     p0_global.extend([dp0[0], dp0[1], 0.03, dp0[3], dp0[4], 0.5, dp0[5], dp0[6]])
                 lower_bounds.extend([0, 0, 0, 0, 0, 0, 0.95, 0.0])
                 upper_bounds.extend([5, 10, 10, 0.5, 15, 1.0, 1.05, 0.5])

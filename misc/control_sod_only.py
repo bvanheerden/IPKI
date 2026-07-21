@@ -2,32 +2,15 @@ import sys
 import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import numpy as np
-import h5py
 from matplotlib import pyplot as plt
-
-plt.rcParams.update({
-    "text.usetex": False,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["Arial"],
-    'mathtext.fontset': 'stixsans',
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "pdf.fonttype": 42,
-    "font.size": 7,
-    'axes.titlesize': 7,
-    'axes.labelsize': 7,
-    'xtick.labelsize': 7,
-    'legend.fontsize': 7,
-})
-import os
 from scipy.optimize import curve_fit
 import pandas as pd
-# import seaborn as sns
-import kinetic_model
+from kinetic_models import kinetic_model
+import utils
+
+utils.setup_plotting()
+
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
 
@@ -39,7 +22,7 @@ datasets = {
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-default_p0 = [1 / 4, 1 / 6, 1 / 6, 1 / 10, 1 / 3, 1.0, 0.5]
+default_p0 = [1 / 4, 1 / 6, 1.5, 1 / 10, 1 / 3, 0.5, 1.0, 0.5]
 
 # Global defaults; these can be overridden per-dataset by a params.json or params.txt
 default_startind = 1
@@ -85,7 +68,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     else:
         norm_pulsephotons, timestep = kinetic_model.avtrace(data_dir, partlist, startind=max(1, startind))
         norm_pulsephotons = norm_pulsephotons[startind:]
-    datapoints = len(norm_pulsephotons) + 1
+    datapoints = len(norm_pulsephotons)
     endpoint = datapoints * timestep
     t = np.linspace(0, endpoint, datapoints)
 
@@ -97,11 +80,11 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     t_dark3 = t_light2 + onlen  # np.argmin(norm_pulsephotons[2 * len(norm_pulsephotons) // 3:]) + 2 * len(norm_pulsephotons) // 3  # etc.
 
 
-    def fitfunc(t, k1, k2, k2_light, k3, k4, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc(t, k1, 0.1, k3, k4, 1, 0.2, t_dark,
-                                                       t_light, t_dark2, t_light2, t_dark3, k2_light=0)
-        return np.concatenate((sol1.y[2]+sol1.y[3], sol2.y[2][1:]+sol2.y[3][1:], sol3.y[2][1:]+sol3.y[3][1:],
-                               sol4.y[2][1:]+sol4.y[3][1:], sol5.y[2][1:]+sol5.y[3][1:], sol6.y[2][1:]+sol6.y[3][1:]))
+    def fitfunc(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction):
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, 1, 0.23, t_dark,
+                                                       t_light, t_dark2, t_light2, t_dark3)
+        return np.concatenate((sol1.y[3]+sol1.y[4], sol2.y[3][1:]+sol2.y[4][1:], sol3.y[3][1:]+sol3.y[4][1:],
+                               sol4.y[3][1:]+sol4.y[4][1:], sol5.y[3][1:]+sol5.y[4][1:], sol6.y[3][1:]+sol6.y[4][1:]))
 
 
     if onlyplot:
@@ -109,12 +92,13 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         pcov = None
     else:
         # noinspection PyTupleAssignmentBalance
-        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0, 0],
-                                                                       [10, 10, 10, 10, 10, 2, 1]), verbose=2)
+        popt, pcov = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, ftol=1e-10, xtol=1e-10,
+                               bounds=([0, 0, 0, 0, 0, 0, 0, 0], [10, 10, 10, 10, 10, 1, 2, 1]), verbose=2,)
 
     tau = [1 / popt[i] for i in range(5)]
-    q_sum = popt[5]
-    q_fraction = popt[6]
+    f = popt[5]
+    q_sum = popt[6]
+    q_fraction = popt[7]
 
     # compute errors if covariance available
     if pcov is not None and np.all(np.isfinite(np.diag(pcov))):
@@ -122,19 +106,22 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         print(popt, perr)
         # propagate error for tau = 1/k: sigma_tau = sigma_k / k^2
         tau_err = [perr[i] / popt[i] ** 2 if popt[i] != 0 else np.nan for i in range(5)]
-        q_sum_err = perr[5]
-        q_fraction_err = perr[6]
+        f_err = perr[5]
+        q_sum_err = perr[6]
+        q_fraction_err = perr[7]
     else:
         perr = [np.nan] * len(popt)
         tau_err = [np.nan] * 5
+        f_err = np.nan
         q_sum_err = np.nan
         q_fraction_err = np.nan
 
     print(f'Tau1 = {tau[0]:.2g} ± {tau_err[0]:.2g} s')
-    print(f'Tau2 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
-    # print(f'Tau2_light = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
+    print(f'Tau_r1 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
+    print(f'Tau_r2 = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
     print(f'Tau3 = {tau[3]:.2g} ± {tau_err[3]:.2g} s')
     print(f'Tau4 = {tau[4]:.2g} ± {tau_err[4]:.2g} s')
+    print(f'f = {f:.2g} ± {f_err:.2g}')
     print(f'Q_sum = {q_sum:.2g} ± {q_sum_err:.2g} cps')
     print(f'Q_fraction = {q_fraction:.2g} ± {q_fraction_err:.2g}')
 
@@ -142,56 +129,11 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     if onlyplot:
         model = None
     else:
-        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6])
+        model = fitfunc(t_plot, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7])
 
     # Return normalized data, model, time base, taus, errors, etc., AND timing parameters
-    return (norm_pulsephotons, model, t_plot[:-1], tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt,
+    return (norm_pulsephotons, model, t_plot, tau, tau_err, q_sum, q_sum_err, q_fraction, q_fraction_err, popt,
             perr, pcov, (t_dark, t_light, t_dark2, t_light2, t_dark3))
-
-
-def analyze_covariance(pcov, param_names=None):
-    """Analyze the covariance matrix and print correlation information.
-
-    Args:
-        pcov: Covariance matrix from curve_fit
-        param_names: List of parameter names (default: ['k1', 'k2', 'k3', 'k4', 'q0'])
-
-    Returns:
-        corr_matrix: Correlation coefficient matrix
-    """
-    if param_names is None:
-        param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
-
-    # Convert covariance to correlation matrix
-    # corr[i,j] = cov[i,j] / (std[i] * std[j])
-    std = np.sqrt(np.diag(pcov))
-    corr_matrix = pcov / np.outer(std, std)
-
-    # Print correlation information
-    print("\nParameter Correlations (from covariance matrix):")
-    print("-" * 60)
-
-    # Find strongly correlated pairs (|corr| > 0.5)
-    strong_corr_pairs = []
-    for i in range(len(param_names)):
-        for j in range(i+1, len(param_names)):
-            corr_val = corr_matrix[i, j]
-            if abs(corr_val) > 0.5:
-                strong_corr_pairs.append((param_names[i], param_names[j], corr_val))
-
-    if strong_corr_pairs:
-        print("Strong correlations (|r| > 0.5):")
-        for p1, p2, corr in sorted(strong_corr_pairs, key=lambda x: abs(x[2]), reverse=True):
-            print(f"  {p1:4s} <-> {p2:4s}  :  r = {corr:+.3f}")
-    else:
-        print("  No strong correlations found (threshold: |r| > 0.5)")
-
-    print("\nFull correlation matrix:")
-    print("-" * 60)
-    corr_df = pd.DataFrame(corr_matrix, index=param_names, columns=param_names)
-    print(corr_df.round(3))
-
-    return corr_matrix
 
 
 # Process all datasets
@@ -231,6 +173,7 @@ for display_name, folder_name in datasets.items():
             'time': t_plot,
             'popt': popt,
             'perr': perr,
+            'pcov': pcov,
             't_params': t_params
         }
 
@@ -249,16 +192,18 @@ for display_name, folder_name in datasets.items():
         results.append({
             'Dataset': display_name,
             'Tau1 (s)': fmt_val_err(tau_list[0], tau_err_list[0]),
-            'Tau2 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
-            # 'Tau2_light (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
+            'Tau_r1 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
+            'Tau_r2 (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
             'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
             'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
+            'f': fmt_val_err(popt[5], perr[5]),
             'Q_sum': fmt_val_err(q_sum, q_sum_err),
             'Q_fraction': fmt_val_err(q_fraction, q_fraction_err)
         })
 
         print(f"✓ Successfully processed {display_name}")
     except Exception as e:
+        raise e
         print(f"✗ Error processing {display_name}: {str(e)}")
         continue
 
@@ -318,7 +263,7 @@ print("=" * 80)
 
 fig, axes = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
 plot_datasets = ['LHCII Control', 'LHCII SOD']
-state_names = ['Bleached (State 0)', 'Quenched (State 1)', 'Unquenched 2 (State 2)', 'Unquenched (State 3)']
+state_names = ['Bleached (State 0)', 'Quenched 1 (State 1)', 'Quenched 2 (State 2)', 'Unquenched 2 (State 3)', 'Unquenched (State 4)']
 
 for i, display_name in enumerate(plot_datasets):
     if display_name in all_data:
@@ -328,23 +273,23 @@ for i, display_name in enumerate(plot_datasets):
         t = np.append(data['time'], data['time'][-1] + (data['time'][1] - data['time'][0]))
         t_dark, t_light, t_dark2, t_light2, t_dark3 = data['t_params']
         
-        # Recalculate model populations
-        sols = kinetic_model.modelfunc(t, popt[0], popt[1], popt[3], popt[4], popt[5], popt[6],
-                                      t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=popt[2])
+        # Recalculate model populations using the 2q model
+        sols = kinetic_model.modelfunc_2q(t, popt[0], popt[1], popt[2], popt[3], popt[4], popt[5], popt[6], popt[7],
+                                         t_dark, t_light, t_dark2, t_light2, t_dark3)
         
         # Combine population trajectories
-        pop_trajectories = [[] for _ in range(4)]
+        pop_trajectories = [[] for _ in range(5)]
         for s_idx, sol in enumerate(sols):
-            # sol.y has shape (4, points)
-            for state_idx in range(4):
+            # sol.y has shape (5, points)
+            for state_idx in range(5):
                 y_vals = sol.y[state_idx]
                 if s_idx > 0:
                     y_vals = y_vals[1:]
                 pop_trajectories[state_idx].extend(y_vals)
         
         # Plot each population
-        for state_idx in range(4):
-            ax.plot(data['time'], pop_trajectories[state_idx], label=state_names[state_idx], linewidth=2)
+        for state_idx in range(5):
+            ax.plot(data['time'], pop_trajectories[state_idx][:-1], label=state_names[state_idx], linewidth=2)
             
         ax.set_ylabel('Population', fontsize=12)
         ax.set_title(f'Model Populations: {display_name}', fontsize=14, fontweight='bold')
@@ -361,19 +306,6 @@ plt.savefig(pop_plot_file, dpi=300, bbox_inches='tight')
 print(f"Population plot saved to: {pop_plot_file}")
 plt.close(fig)
 
-# Analyze covariance matrices
-print("\n" + "=" * 80)
-print("Covariance Matrix Analysis")
-print("=" * 80)
-
-param_names = ['k1', 'k2', 'k2_light', 'k3', 'k4', 'q_sum', 'q_fraction']
-
-for display_name, pcov in covariance_data.items():
-    if pcov is not None and np.all(np.isfinite(pcov)):
-        print(f"\n{display_name}:")
-        analyze_covariance(pcov, param_names)
-    else:
-        print(f"\n{display_name}: No valid covariance data available")
 
 # Create bar plot of fold-change (SOD / Control) for k1-k4
 print("\n" + "=" * 80)
@@ -384,43 +316,108 @@ if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
     control_popt = all_data['LHCII Control']['popt']
     sod_popt = all_data['LHCII SOD']['popt']
 
-    # Rates: k1=idx 0, k2=idx 1 (but fixed to 0.54 in model), k3=idx 3, k4=idx 4
-    # The user asked for k1-k4.
-    # Note: in fitfunc, k2 is hardcoded to 0.54, so k_sod[1] / k_control[1] should technically use the fixed value or the popt[1] which might be the p0[1] if it didn't change or if it was allowed to float but ignored.
+    # Rates: k1=idx 0, kr1=idx 1, kr2=idx 2, k3=idx 3, k4=idx 4, f=idx 5
+    # The user wants weighted average of kr1 and kr2: k_r_avg = 1 / (f / kr1 + (1 - f) / kr2)
     
-    k_indices = [0, 1, 3, 4]
+    # Standard errors for individual parameters
+    control_perr = all_data['LHCII Control']['perr']
+    sod_perr = all_data['LHCII SOD']['perr']
+
+    def get_kr_avg(popt, pcov):
+        k1, kr1, kr2, k3, k4, f = popt[0], popt[1], popt[2], popt[3], popt[4], popt[5]
+        kr_avg = 1 / (f / kr1 + (1 - f) / kr2)
+        
+        # Jacobian for kr_avg with respect to [kr1, kr2, f]
+        # kr_avg = (f/kr1 + (1-f)/kr2)^-1
+        # d(kr_avg)/dkr1 = f * (kr_avg / kr1)**2
+        # d(kr_avg)/dkr2 = (1-f) * (kr_avg / kr2)**2
+        # d(kr_avg)/df = kr_avg**2 * (1/kr2 - 1/kr1)
+        jac = np.array([f * (kr_avg / kr1)**2, (1 - f) * (kr_avg / kr2)**2, kr_avg**2 * (1/kr2 - 1/kr1)])
+        
+        # Indices of [kr1, kr2, f] in popt are [1, 2, 5]
+        indices = [1, 2, 5]
+        sub_cov = pcov[np.ix_(indices, indices)]
+        
+        kr_avg_var = jac @ sub_cov @ jac.T
+        kr_avg_err = np.sqrt(max(0, kr_avg_var))
+        return kr_avg, kr_avg_err
+
+    control_kr_avg, control_kr_avg_err = get_kr_avg(control_popt, all_data['LHCII Control']['pcov'])
+    sod_kr_avg, sod_kr_avg_err = get_kr_avg(sod_popt, all_data['LHCII SOD']['pcov'])
+
+    k_indices = [0, 3, 4]
     k_labels = [r'$k_1$', r'$k_2$', r'$k_3$', r'$k_4$']
     
-    # Use fixed k2 value 0.54 as defined in fitfunc for both if we want the actual model rates
-    k_control = [control_popt[0], control_popt[1], control_popt[3], control_popt[4]]
-    k_sod = [sod_popt[0], sod_popt[1], sod_popt[3], sod_popt[4]]
-    print('k_control', k_control)
-    print('k_sod', k_sod)
+    k_control = [control_popt[0], control_kr_avg, control_popt[3], control_popt[4]]
+    k_sod = [sod_popt[0], sod_kr_avg, sod_popt[3], sod_popt[4]]
     
+    k_control_err = [control_perr[0], control_kr_avg_err, control_perr[3], control_perr[4]]
+    k_sod_err = [sod_perr[0], sod_kr_avg_err, sod_perr[3], sod_perr[4]]
+
+    print('k_control', k_control)
+    print('k_control_err', k_control_err)
+    print('k_sod', k_sod)
+    print('k_sod_err', k_sod_err)
+
     fold_changes = [sod / ctrl if ctrl != 0 else np.nan for sod, ctrl in zip(k_sod, k_control)]
     
-    fig, ax = plt.subplots(figsize=(8, 6))
-    bars = ax.bar(k_labels, fold_changes, color=['C0', 'C1', 'C2', 'C3'], alpha=0.8, edgecolor='black')
+    fold_change_errs = []
+    for sod, ctrl, sod_err, ctrl_err in zip(k_sod, k_control, k_sod_err, k_control_err):
+        if ctrl != 0 and sod != 0:
+            rel_err_sq = (sod_err / sod)**2 + (ctrl_err / ctrl)**2
+            err = (1 / np.log(2)) * np.sqrt(rel_err_sq)
+            fold_change_errs.append(err)
+        else:
+            fold_change_errs.append(np.nan)
+
+    fold_changes = np.log2(fold_changes)
+
+    fig, ax = plt.subplots(figsize=(70/25.4, 40/25.4))
+    bars = ax.bar(k_labels, fold_changes, yerr=fold_change_errs, capsize=3, error_kw=dict(elinewidth=1),
+                  color=['C0', 'C4', 'C1', 'C2'], alpha=0.8, edgecolor='black')
     
-    # Add a horizontal line at 1.0 for reference
-    ax.axhline(y=1.0, color='red', linestyle='--', linewidth=1.5, alpha=0.7)
-    
-    ax.set_ylabel('Fold-change (SOD / Control)', fontsize=12)
-    ax.set_title('Fold-change in kinetic rates (SOD vs Control)', fontsize=14, fontweight='bold')
-    
+    ax.set_ylabel(r'Fold-change $\log_2$(SOD / Control)')
+
     # Add text labels on top of bars
-    for bar in bars:
+    for i, bar in enumerate(bars):
         height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-                f'{height:.2f}', ha='center', va='bottom', fontsize=11)
+        err = fold_change_errs[i]
+        if height > 0:
+            y_pos = height + err + 0.05
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='bottom')
+        else:
+            print(err)
+            y_pos = height - err - 0.07
+            ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='top')
 
-    ax.grid(True, axis='y', alpha=0.3)
-    plt.tight_layout()
+    # ax.set_ylim([-1, 0.5])
+    ax.tick_params(axis='x', top=True, labeltop=True, bottom=True, labelbottom=True)
+    ax.spines['top'].set_position(('data', 0))
+    ax.spines['bottom'].set_position(('data', 0))
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(True)
+
+    # Hide the first two labels from the top and the last two from the bottom
+    labels = ax.get_xticklabels()
+    # Note: With labeltop=True and labelbottom=True, we might have two sets of labels
+    # but usually Matplotlib handles them together if not using secondary_xaxis.
+    # Let's use a more robust approach:
     
-    # Save fold-change plot
-    fc_plot_file = os.path.join(base_dir, 'k_fold_change_sod_control.png')
-    plt.savefig(fc_plot_file, dpi=300, bbox_inches='tight')
-    print(f"Fold-change plot saved to: {fc_plot_file}")
-    plt.close(fig)
+    # Refresh the figure to ensure ticks are populated
+    fig.canvas.draw()
+    
+    # Get all tick objects
+    ticks = ax.xaxis.get_major_ticks()
+    for i, tick in enumerate(ticks):
+        if i < 2:
+            # First two labels below the axis
+            tick.label1.set_visible(True)
+            tick.label2.set_visible(False)
+        else:
+            # Other labels above the axis
+            tick.label1.set_visible(False)
+            tick.label2.set_visible(True)
 
-print("\nAnalysis complete!")
+    plt.tight_layout()
+    plt.show()
+
