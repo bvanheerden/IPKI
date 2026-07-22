@@ -12,8 +12,8 @@ import utils
 utils.setup_plotting()
 
 base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-dataset_folder = '301 mE'
-dataset_name = '301 mE'
+dataset_folder = '446 mE'
+dataset_name = '446 mE'
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -115,6 +115,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None):
         q_sum_err = np.nan
         q_fraction_err = np.nan
 
+    print(popt)
     print(f'Tau1 = {tau[0]:.2f} ± {tau_err[0]:.2f} s')
     print(f'Taur1 = {tau[1]:.2f} ± {tau_err[1]:.2f} s')
     print(f'Taur2 = {tau[2]:.2f} ± {tau_err[2]:.2f} s')
@@ -164,9 +165,6 @@ try:
 
     print(f"\n✓ Successfully processed {dataset_name}")
 
-    # Create plot
-    print("\nCreating plot...")
-    fig, ax = plt.subplots(figsize=(90/25.4, 50/25.4))
 
     # Add light/dark bar at the top
     # Phases: [0, t_dark] Light, [t_dark, t_light] Dark, [t_light, t_dark2] Light, ...
@@ -178,28 +176,6 @@ try:
         (t_light2, t_dark3, 'white'),
         (t_dark3, t_plot[-1] if len(t_plot) > 0 else 0, 'black')
     ]
-    
-    # Plot experimental data
-    ax.plot(t_plot, norm_pulsephotons, '.', color='gray', label=f'{dataset_name} (data)',
-            markersize=1, alpha=0.4)
-
-    # Plot model fit
-    if model is not None:
-        ax.plot(t_plot, model, '-', color='C3', label=f'{dataset_name} (fit)', lw=1)
-
-    for start, end, color in phases:
-        ax.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
-                   edgecolor='black', linewidth=0.5, transform=ax.get_xaxis_transform())
-
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Normalized fluorescence')
-    ax.set_xlim(0, 90)
-    plt.tight_layout()
-
-    # Save plot
-    # plot_file = os.path.join(base_dir, 'gco_control_fit.png')
-    # plt.savefig(plot_file, dpi=300, bbox_inches='tight')
-    # print(f"Plot saved to: {plot_file}")
 
     # Create figure for all 5 populations
     if populations is not None:
@@ -222,13 +198,13 @@ try:
         # --- Add Thylakoid Populations ---
         # Paths for thylakoid data
         thy_base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
-        thy_folders = {'AA': '301 mE AA', 'non-AA': '301 mE'}
+        thy_folders = {'AA': '446 mE AA', 'non-AA': '446 mE'}
         
         def fit_thylakoid(folder_path, has_aa):
             # Parameters from Power_studies_June2026.py and typical thylakoid fits
-            onlen_thy = 50
+            onlen_thy = 10
             offlen_thy = 200
-            startind_thy = 6
+            startind_thy = 5
             k2_shared_val = 0.5  # Typical shared k2 for thylakoids
             q_fraction_thy = 0.23 # Fixed in Power_studies_June2026.py fitfunc
             
@@ -245,12 +221,18 @@ try:
             t_dark3 = t_light2 + onlen_thy
             
             # Local fitfunc for 1-quencher thylakoid model
-            def thy_fitfunc(t, k1, k2_light, k3, k4, q_sum, q_fraction, return_populations=False):
+            def thy_fitfunc(t, k1, k2, k3, k4, q_sum, q_fraction, return_populations=False):
                 # In AA, k2_light is effectively 0 or handled differently, but here we follow local_fitfunc logic
-                res = kinetic_model.modelfunc(t, k1, k2_shared_val, k3, k4, q_sum, q_fraction,
-                                              t_dark, t_light, t_dark2, t_light2, t_dark3, 
-                                              k2_light=0 if has_aa else k2_light,
-                                              return_populations=return_populations)
+                if has_aa:
+                    res = kinetic_model.modelfunc(t, 1.64, 3.66, 0.05, 0.933, 1, 0.19,
+                                                  t_dark, t_light, t_dark2, t_light2, t_dark3,
+                                                  k2_light=None,
+                                                  return_populations=return_populations)
+                else:
+                    res = kinetic_model.modelfunc(t, 0.232, 0.264, 0.17, 2.99, 1, 0.26,
+                                                  t_dark, t_light, t_dark2, t_light2, t_dark3,
+                                                  k2_light=None,
+                                                  return_populations=return_populations)
                 if return_populations:
                     return res
                 # Return sum of unquenched populations
@@ -264,36 +246,56 @@ try:
                     out = out[:len(t)]
                 return out
 
-            # Initial guess [k1, k2_light, k3, k4, q_sum, q_fraction]
+            # Initial guess [k1, k2, k3, k4, q_sum, q_fraction]
             p0_thy = [0.05, 1.0, 0.16, 0.1, 1.0, 0.2]
             bounds_thy = ([0, 0, 0.002, 0.01, 0.98, 0.1], [5, 13, 0.5, 15, 1.05, 0.3])
             
             popt, _ = curve_fit(thy_fitfunc, t, norm_pulsephotons, p0=p0_thy, bounds=bounds_thy)
+            print(popt)
             
-            # Extract populations
+            # Extract populations and model
             pops = thy_fitfunc(t, *popt, return_populations=True)
-            return t, pops
+            model_thy = thy_fitfunc(t, *popt, return_populations=False)
+            return t, pops, norm_pulsephotons, model_thy
 
         try:
             thy_pop_labels = ['B', 'Q', 'U2', 'U1']
+            colors = ['C4', 'C2', 'C1', 'C0']
             print("Fitting Thylakoid AA...")
-            t_aa, pops_aa = fit_thylakoid(os.path.join(thy_base_dir, thy_folders['AA']), has_aa=True)
-            for i in [3, 1, 2, 0]: # Order: U1, U2, Q, B
-                ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i])
-            ax_thy_aa.set_title('Thylakoid AA')
+            t_aa, pops_aa, data_aa, model_aa = fit_thylakoid(os.path.join(thy_base_dir, thy_folders['AA']), has_aa=True)
+            
+            for i in [3, 2, 1, 0]: # Order: U1, U2, Q, B
+                ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i])
+            ax_thy_aa.set_title('Thylakoid AA Populations')
             
             print("Fitting Thylakoid non-AA...")
-            t_naa, pops_naa = fit_thylakoid(os.path.join(thy_base_dir, thy_folders['non-AA']), has_aa=False)
-            for i in [2, 3, 1, 0]: # Order: U1, U2, Q, B
-                ax_thy_naa.plot(t_naa, pops_naa[i], label=thy_pop_labels[i])
-            ax_thy_naa.set_title('Thylakoid non-AA')
+            t_naa, pops_naa, data_naa, model_naa = fit_thylakoid(os.path.join(thy_base_dir, thy_folders['non-AA']), has_aa=False)
+            
+            for i in [3, 2, 1, 0]: # Order: U1, U2, Q, B
+                ax_thy_naa.plot(t_naa, pops_naa[i], label=thy_pop_labels[i], color=colors[i])
+            ax_thy_naa.set_title('Thylakoid non-AA Populations')
         except Exception as thy_e:
             print(f"Warning: Could not plot Thylakoid populations: {thy_e}")
 
         for ax_curr in [ax_thy_aa, ax_thy_naa]:
             for start, end, color in phases:
-                ax_curr.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
-                           edgecolor='black', linewidth=0.5, transform=ax_curr.get_xaxis_transform())
+                # Update phase durations for thylakoids (onlen=10, offlen=200)
+                # But wait, the 'phases' variable was defined for LHCII (onlen=50, offlen=600).
+                # We need thylakoid specific phases here.
+                t_dark_thy = 10
+                offlen_thy = 200
+                thy_phases = [
+                    (0, t_dark_thy, 'white'),
+                    (t_dark_thy, t_dark_thy + offlen_thy, 'black'),
+                    (t_dark_thy + offlen_thy, 2*t_dark_thy + offlen_thy, 'white'),
+                    (2*t_dark_thy + offlen_thy, 2*t_dark_thy + 2*offlen_thy, 'black'),
+                    (2*t_dark_thy + 2*offlen_thy, 3*t_dark_thy + 2*offlen_thy, 'white'),
+                    (3*t_dark_thy + 2*offlen_thy, 55, 'black') # approx
+                ]
+                for s_thy, e_thy, c_thy in thy_phases:
+                    ax_curr.axvspan(s_thy, e_thy, ymin=0.96, ymax=1.0, facecolor=c_thy,
+                               edgecolor='black', linewidth=0.5, transform=ax_curr.get_xaxis_transform())
+            
             ax_curr.set_ylabel('Population')
             ax_curr.set_xlim(0, 51)
             ax_curr.set_ylim(0, None)

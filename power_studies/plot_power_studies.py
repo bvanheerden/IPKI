@@ -119,7 +119,7 @@ if not df_with_aa.empty:
     fig_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 60 / 25.4))
 
     x_aa = df_with_aa['Power (mE)'].values
-    x_extrap = np.linspace(min(1, x_aa.min()), max(2, x_aa.max()), 100)
+    x_extrap = np.logspace(0, 3, 100)
 
     # Plot K3 (with AA)
     k3_aa = get_numeric(df_with_aa['K3 (s⁻¹)'])
@@ -188,7 +188,7 @@ if not df_with_aa.empty:
     # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
     # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
 
-    plot_overlay = True
+    plot_overlay = False
     # Overlay Non-AA data on the AA plot
     if not df_no_aa.empty and plot_overlay:
         x_no_aa_overlay = df_no_aa['Power (mE)'].values
@@ -249,7 +249,7 @@ if not df_with_aa.empty:
     ax1.set_xscale('log')
     ax1.set_yscale('log')
     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
-    ax1.set_xlim(1.8, None)
+    ax1.set_xlim(1, 1000)
     ax1.set_ylim(2e-4, None)
 
     # Custom legend without error bars
@@ -268,13 +268,16 @@ if not df_with_aa.empty:
     # ax1.text(2, 0.1, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2')
     # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
     # log scale
-    ax1.text(1.9, 0.25, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', fontsize=6)
-    ax1.text(2, k1_extrap*1.4, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
-    ax1.text(2, k3_extrap*0.4, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
-    ax1.text(2, k4_extrap*0.4, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
+    # ax1.text(1.9, 0.25, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', fontsize=6)
+    ax1.text(2.1, k1_extrap*1.5, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
+    ax1.text(2.1, k3_extrap*0.6, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
+    ax1.text(2.1, k4_extrap*0.45, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
+    ax1.text(2.1, 2, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
     ax1.legend(handles=legend_elements, loc='lower right', frameon=False, bbox_to_anchor=(0.9, 0))
+    ax1.axvline(2, color='gray', linestyle='--', linewidth=1)
 
-    sns.despine()
+    # sns.despine()
+    # ax1.set_xlim(1, 1000)
     plt.tight_layout()
     plot_file_aa = os.path.join(base_data_dir, 'k_values_vs_power_with_AA.png')
     # plt.savefig(plot_file_aa, dpi=300, bbox_inches='tight')
@@ -288,7 +291,7 @@ if not df_no_aa.empty:
     fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 50 / 25.4))
 
     x_no_aa = df_no_aa['Power (mE)'].values
-    x_extrap = np.linspace(min(2, x_no_aa.min()), max(2, x_no_aa.max()), 100)
+    x_extrap = np.logspace(0, 3, 100)
 
     # Plot K3 (no AA)
     k3_no_aa = get_numeric(df_no_aa['K3 (s⁻¹)'])
@@ -387,8 +390,9 @@ if not df_no_aa.empty:
     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    ax1.set_xlim(15, None)
-    
+    ax1.set_xlim(10, 1000)
+    ax1.set_ylim(1e-4, None)
+
     # Custom legend without error bars
     from matplotlib.lines import Line2D
     legend_elements = [
@@ -399,7 +403,8 @@ if not df_no_aa.empty:
     ]
     ax1.legend(handles=legend_elements, loc='best', frameon=False)
 
-    sns.despine()
+    ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
+    # sns.despine()
     plt.tight_layout()
     plot_file_no_aa = os.path.join(base_data_dir, 'k_values_vs_power_no_AA.png')
     # plt.savefig(plot_file_no_aa, dpi=300, bbox_inches='tight')

@@ -239,7 +239,8 @@ if not df_no_aa.empty:
     fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 60 / 25.4))
 
     x_no_aa = df_no_aa['Power (mE)'].values
-    x_extrap = np.linspace(min(2, x_no_aa.min()), max(1000, x_no_aa.max()), 100)
+    # x_extrap = np.linspace(min(2, x_no_aa.min()), max(1000, x_no_aa.max()), 100)
+    x_extrap = np.logspace(0, 3, 100)
 
     # Plot K3 (no AA)
     k3_no_aa = get_numeric(df_no_aa['K3 (s⁻¹)'])
@@ -247,7 +248,7 @@ if not df_no_aa.empty:
                 yerr=get_error(df_no_aa['K3 (s⁻¹)'][:-1]), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=3, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3 = linear_fit(x_no_aa[:-1], k3_no_aa[:-1])
+    m3, b3, cov3 = linear_fit(x_no_aa[:-2], k3_no_aa[:-2])
     k3_extrap = m3 * 2 + b3
     print(m3, b3)
     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
@@ -260,7 +261,7 @@ if not df_no_aa.empty:
                 yerr=get_error(df_no_aa['K4 (s⁻¹)'][:-1]), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=3, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4 = linear_fit(x_no_aa[:-1], k4_no_aa[:-1])
+    m4, b4, cov4 = linear_fit(x_no_aa[:-2], k4_no_aa[:-2])
     k4_extrap = m4 * 2 + b4
     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
     ax1.plot(x_extrap, m4 * x_extrap + b4, 'C2-', label=None)
@@ -272,7 +273,7 @@ if not df_no_aa.empty:
                  yerr=get_error(df_no_aa['K1 (s⁻¹)'][:-1]), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=3, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_no_aa[:-1], k1_no_aa[:-1])
+    m1, b1, cov1 = linear_fit(x_no_aa[:-2], k1_no_aa[:-2])
     k1_extrap = m1 * 2 + b1
     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
     ax1.plot(x_extrap, m1 * x_extrap + b1, 'C0-', label=None)
@@ -336,22 +337,22 @@ if not df_no_aa.empty:
         k2_thy = k2_thy_series.iloc[0] if not k2_thy_series.empty else 0.0
         ax1.axhline(k2_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
 
-    ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
     ax1.set_xscale('log')
     ax1.set_yscale('log')
-    ax1.set_xlim(60, 1000)
-    
+    ax1.set_xlim(10, 1000)
+    ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
+
     # Custom legend without error bars
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
     ]
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=2)#, bbox_to_anchor=(0, 0.95))
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=1)#, bbox_to_anchor=(0, 0.95))
 
-    sns.despine()
+    # sns.despine()
     plt.tight_layout()
     plot_file_no_aa = os.path.join(base_data_dir, 'k_values_vs_power_no_AA.png')
     plt.savefig(plot_file_no_aa, dpi=300, bbox_inches='tight')

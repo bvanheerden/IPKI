@@ -158,8 +158,11 @@ def plot_switching_rates(summary, dataset_name, output_plot):
     conditions_sorted = sorted(summary.keys(), key=lambda c: summary[c]['avg_rate'], reverse=True)
     avg_rates = [summary[c]['avg_rate'] for c in conditions_sorted]
     std_errs = [summary[c]['std_err'] for c in conditions_sorted]
-    
-    plt.figure(figsize=(90/25.4, 40/25.4))
+
+    if dataset_name == "SMS_blinking":
+        plt.figure(figsize=(90/25.4, 40/25.4))
+    else:
+        plt.figure(figsize=(40/25.4, 40/25.4))
     
     # Color logic
     if dataset_name == "SMS_blinking":

@@ -80,7 +80,7 @@ def solve_expm(M, y0, n):
         return Result(y.T)
 
 def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=None,
-              debug=False):
+              debug=False, return_populations=False):
     """
     Model function for solving the kinetic equations across multiple light/dark phases.
     If k2_light is provided, it is used during light phases instead of k2.
@@ -123,6 +123,15 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
     curr_y = sol5.y[:, -1] if sol5.y.shape[1] > 0 else curr_y
     sol6 = solve_expm(M_dark, curr_y, max(0, len(t) - t_dark3))
     
+    if return_populations:
+        # y components: [Bleached, Quenched, Unquenched2, Unquenched]
+        pops = []
+        for i in range(4):
+            pop_i = np.concatenate((sol1.y[i], sol2.y[i][1:], sol3.y[i][1:],
+                                    sol4.y[i][1:], sol5.y[i][1:], sol6.y[i][1:]))
+            pops.append(pop_i)
+        return np.array(pops)
+
     return sol1, sol2, sol3, sol4, sol5, sol6
 
 def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3,
