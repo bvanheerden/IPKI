@@ -9,8 +9,8 @@ if project_root not in sys.path:
 import utils
 import pandas as pd
 import numpy as np
-import seaborn as sns
 from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 utils.setup_plotting()
 
@@ -22,58 +22,139 @@ def loadspec(filename, existing_df, run):
 
 dataset = 'Low power'
 
-DHE = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
-# DHE = loadspec(f'DHE 3 510 nm 0 min.asc', DHE, '0')
-# LHCII_max = LHCII['Intensity (counts)'][46]
-for i in [0, 2, 4, 6]:
-    DHE = loadspec(f'DHE 2 410 nm {i} min.asc', DHE, f'{i}')
+# Load DHE data (Control)
+dhe_df = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
+for rep in [1, 2, 3]:
+    for i in [0, 2, 4]:
+        dhe_df = loadspec(f'DHE {rep} 410 nm {i} min.asc', dhe_df, f'{i}')
 
-DHE_SOD = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
-for i in [0, 2, 4, 6]:
-    DHE_SOD = loadspec(f'DHE+SOD 2 410 nm {i} min.asc', DHE_SOD, f'{i}')
+# Load DHE+SOD data
+dhe_sod_df = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
+for rep in [1, 2, 3]:
+    for i in [0, 2, 4, 6]:
+        dhe_sod_df = loadspec(f'DHE+SOD {rep} 410 nm {i} min.asc', dhe_sod_df, f'{i}')
 
-DHE_LHCII = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
+# Load DHE_LHCII data (Wait, the original code called DHE_LHCII but used "No LHCII Control")
+# Original lines 34-36:
+# DHE_LHCII = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
+# for i in [0, 2, 4]:
+#     DHE_LHCII = loadspec(f'No LHCII Control {i} min.asc', DHE_LHCII, f'{i}')
+
+dhe_lhcii_df = pd.DataFrame(columns=['Wavelength (nm)', 'Intensity (counts)'])
 for i in [0, 2, 4]:
-    DHE_LHCII = loadspec(f'No LHCII Control {i} min.asc', DHE_LHCII, f'{i}')
+    dhe_lhcii_df = loadspec(f'No LHCII Control {i} min.asc', dhe_lhcii_df, f'{i}')
 
-zero_fluo = np.array(DHE_LHCII[DHE_LHCII['run'] == '0']['Intensity (counts)']) / 2.2
-four_fluo = np.array(DHE_LHCII[DHE_LHCII['run'] == '4']['Intensity (counts)']) / 2.2
-norm_fluo = four_fluo - zero_fluo
-norm_wav = DHE_LHCII[DHE_LHCII['run'] == '4']['Wavelength (nm)']
+# Wavelengths (assumed same for all)
+wav = dhe_lhcii_df[dhe_lhcii_df['run'] == '4']['Wavelength (nm)'].unique()[::-1]
 
-zero_fluo = np.array(DHE[DHE['run'] == '0']['Intensity (counts)'])
-four_fluo = np.array(DHE[DHE['run'] == '4']['Intensity (counts)'])
-norm_fluo_LHCII = four_fluo - zero_fluo
-# norm_fluo_LHCII = zero_fluo
+# Find index for 620 nm normalization
+idx_620 = np.abs(wav - 620).argmin()
 
-zero_fluo = np.array(DHE_SOD[DHE_SOD['run'] == '0']['Intensity (counts)'])
-four_fluo = np.array(DHE_SOD[DHE_SOD['run'] == '4']['Intensity (counts)'])
-norm_fluo_SOD = four_fluo - zero_fluo
+# Process DHE_LHCII (Control?)
+lhcii_zero = dhe_lhcii_df[dhe_lhcii_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values / 2.2
+lhcii_four = dhe_lhcii_df[dhe_lhcii_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values / 2.2
 
-# sns.set_context('notebook', font_scale=1, rc={"lines.linewidth": 3})
-# fig, (ax1, ax2, ax3) = plt.subplots(1, 3, sharey=True, figsize=(15, 5))
-fig, ax1 = plt.subplots(1, 1, sharey=True, figsize=utils.get_figure_size(110, 60))
-# sns.lineplot(DHE[DHE['run']=='0'], x='Wavelength (nm)', y='Intensity (counts)', label='0 min', ax=ax1)
-# sns.lineplot(DHE[DHE['run']=='4'], x='Wavelength (nm)', y='Intensity (counts)', label='DHE+LHCII 4 min', ax=ax1)
-# sns.lineplot(DHE_SOD[DHE_SOD['run'] == '4'], x='Wavelength (nm)', y='Intensity (counts)', label='DHE+LHCII+SOD 4 min', ax=ax1)
-# sns.lineplot(DHE_LHCII[DHE_LHCII['run'] == '0'], x='Wavelength (nm)', y='Intensity (counts)', label='DHE 4 min', ax=ax1)
-ax1.plot(norm_wav, norm_fluo/16000, label='DHE', lw=2)
-ax1.plot(norm_wav, norm_fluo_LHCII/16000, label='DHE+LHCII', lw=2)
-ax1.plot(norm_wav, norm_fluo_SOD/16000, label='DHE+LHCII+SOD', lw=2)
-ax1.legend(title='', frameon=False)
-# ax2.legend(title='Min. illum.')
-# ax3.legend(title='Min. illum.')
-# ax1.set_title('DHE-SOD')
-# ax2.set_title('DHE+SOD')
-# ax3.set_title('DHE-LHCII')
-# ax1.set_ylabel('Norm. counts')
-ax1.set_xlim((550, 635))
-# ax2.set_xlim((550, 640))
-# ax3.set_xlim((550, 640))
-ax1.set_ylim((0, 1.1))
-ax1.set_xlabel('Wavelength (nm)')
-ax1.set_ylabel(r'$\Delta$ Fluorescence (a.u.)')
-# sns.despine()
+# Normalize by 620 nm value of initial spectrum
+norm_lhcii = lhcii_zero[idx_620]
+lhcii_zero /= norm_lhcii
+lhcii_four /= norm_lhcii
+lhcii_diff = lhcii_four - lhcii_zero
+
+# Process DHE
+dhe_zero = dhe_df[dhe_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+dhe_four = dhe_df[dhe_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+
+# Normalize by 620 nm value of initial spectrum
+norm_dhe = dhe_zero[idx_620]
+dhe_zero /= norm_dhe
+dhe_four /= norm_dhe
+dhe_diff = dhe_four - dhe_zero
+
+# Process DHE+SOD
+sod_zero = dhe_sod_df[dhe_sod_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+sod_four = dhe_sod_df[dhe_sod_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+
+# Normalize by 620 nm value of initial spectrum
+norm_sod = sod_zero[idx_620]
+sod_zero /= norm_sod
+sod_four /= norm_sod
+sod_diff = sod_four - sod_zero
+
+fig, axes = plt.subplots(2, 2, figsize=utils.get_figure_size(140, 110),
+                         sharex=True)
+ax_diff, ax_lhcii, ax_dhe, ax_sod = axes.flatten()
+
+# Plot 1: Difference Spectra
+ax_diff.plot(wav, lhcii_diff, label='DHE', lw=2)
+ax_diff.plot(wav, dhe_diff, label='DHE+LHCII', lw=2)
+ax_diff.plot(wav, sod_diff, label='DHE+LHCII+SOD', lw=2)
+ax_diff.legend(title='', frameon=False)
+ax_diff.set_ylabel(r'$\Delta$ Fluorescence (norm.)')
+# ax_diff.set_ylim((0, 1.1))
+ax_diff.set_xlim((550, 710))
+
+# Inset for Plot 1
+mask = (wav >= 550) & (wav <= 650)
+ax_diff_ins = inset_axes(ax_diff, width="40%", height="40%", loc='upper left', borderpad=4)
+ax_diff_ins.plot(wav, lhcii_diff, lw=1)
+ax_diff_ins.plot(wav, dhe_diff, lw=1)
+ax_diff_ins.plot(wav, sod_diff, lw=1)
+ax_diff_ins.set_xlim(550, 650)
+diff_min = min(lhcii_diff[mask].min(), dhe_diff[mask].min(), sod_diff[mask].min())
+diff_max = max(lhcii_diff[mask].max(), dhe_diff[mask].max(), sod_diff[mask].max())
+padding = (diff_max - diff_min) * 0.05
+ax_diff_ins.set_ylim(diff_min - padding, diff_max + padding)
+ax_diff_ins.tick_params(labelsize=8)
+# mark_inset(ax_diff, ax_diff_ins, loc1=2, loc2=4, fc="none", ec="black")
+
+# Plot 2: DHE
+ax_lhcii.plot(wav, lhcii_zero, label='0 min', color='black')
+ax_lhcii.plot(wav, lhcii_four, label='4 min', color='red')
+# ax_lhcii.set_title('DHE')
+ax_lhcii.legend(frameon=False)
+
+# Plot 3: DHE + LHCII
+ax_dhe.plot(wav, dhe_zero, label='0 min', color='black')
+ax_dhe.plot(wav, dhe_four, label='4 min', color='red')
+# ax_dhe.set_title('DHE+LHCII')
+ax_dhe.set_xlabel('Wavelength (nm)')
+ax_dhe.set_ylim((0, 40))
+
+# Inset for Plot 3
+ax_dhe_ins = inset_axes(ax_dhe, width="40%", height="40%", loc='upper left', borderpad=3)
+ax_dhe_ins.plot(wav, dhe_zero, color='black', lw=1)
+ax_dhe_ins.plot(wav, dhe_four, color='red', lw=1)
+ax_dhe_ins.set_xlim(550, 650)
+dhe_min = min(dhe_zero[mask].min(), dhe_four[mask].min())
+dhe_max = max(dhe_zero[mask].max(), dhe_four[mask].max())
+padding_dhe = (dhe_max - dhe_min) * 0.05
+ax_dhe_ins.set_ylim(dhe_min - padding_dhe, dhe_max + padding_dhe)
+ax_dhe_ins.tick_params(labelsize=8)
+# mark_inset(ax_dhe, ax_dhe_ins, loc1=2, loc2=4, fc="none", ec="black")
+
+# Plot 4: DHE + LHCII + SOD
+ax_sod.plot(wav, sod_zero, label='0 min', color='black')
+ax_sod.plot(wav, sod_four, label='4 min', color='red')
+# ax_sod.set_title('DHE+LHCII+SOD')
+ax_sod.set_xlabel('Wavelength (nm)')
+ax_sod.set_ylim((0, 40))
+
+# Inset for Plot 4
+ax_sod_ins = inset_axes(ax_sod, width="40%", height="40%", loc='upper left', borderpad=3)
+ax_sod_ins.plot(wav, sod_zero, color='black', lw=1)
+ax_sod_ins.plot(wav, sod_four, color='red', lw=1)
+ax_sod_ins.set_xlim(550, 650)
+sod_min = min(sod_zero[mask].min(), sod_four[mask].min())
+sod_max = max(sod_zero[mask].max(), sod_four[mask].max())
+padding_sod = (sod_max - sod_min) * 0.05
+ax_sod_ins.set_ylim(sod_min - padding_sod, sod_max + padding_sod)
+ax_sod_ins.tick_params(labelsize=8)
+# mark_inset(ax_sod, ax_sod_ins, loc1=2, loc2=4, fc="none", ec="black")
+
+for ax in axes.flatten():
+    if ax != ax_diff:
+        ax.set_ylabel('Fluorescence (norm.)')
 
 plt.tight_layout()
-plt.show()
+plt.savefig('DHE_spec.pdf')
+# plt.show()

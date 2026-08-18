@@ -88,6 +88,7 @@ else:
         path = os.path.join(results_dir, '../results/data_no_aa_1q.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
+            df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
     except FileNotFoundError:
         df_no_aa = pd.DataFrame()
         print("data_no_aa.pkl not found in results/")
@@ -96,6 +97,7 @@ else:
         path = os.path.join(results_dir, '../results/data_with_aa_1q.pkl')
         with open(path, 'rb') as f:
             df_with_aa = pickle.load(f)
+            df_with_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
     except FileNotFoundError:
         df_with_aa = pd.DataFrame()
         print("data_with_aa.pkl not found in results/")
@@ -136,8 +138,8 @@ if not df_with_aa.empty:
     # Linear fit for K3
     m3, b3, cov3 = linear_fit(x_aa[:5], k3_aa[:5])
     k3_fit = m3 * x_extrap + b3
-    k3_extrap = m3 * 2 + b3
-    print('b3', b3)
+    # k3_extrap = m3 * 2 + b3
+    k3_extrap = k3_aa[0]
     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
     ax1.plot(x_extrap, k3_fit, 'C1-', label=None)
     ax1.fill_between(x_extrap, y_low3, y_high3, color='C1', alpha=0.2)
@@ -156,9 +158,10 @@ if not df_with_aa.empty:
                 yerr=get_asymmetric_error(k4_aa, k4_err, k4_min), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4 = linear_fit(x_aa[:], k4_aa[:])
+    m4, b4, cov4 = linear_fit(x_aa[:7], k4_aa[:7])
     k4_fit = m4 * x_extrap + b4
-    k4_extrap = m4 * 1 + b4
+    # k4_extrap = m4 * 1 + b4
+    k4_extrap = k4_aa[0]
     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
     print('b4', b4)
     ax1.plot(x_extrap, k4_fit, 'C2-', label=None)
@@ -171,9 +174,12 @@ if not df_with_aa.empty:
                  yerr=get_asymmetric_error(k1_aa, k1_err), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_aa[1:4], k1_aa[1:4])
+    m1, b1, cov1 = linear_fit(x_aa[:5], k1_aa[:5])
     k1_fit = m1 * x_extrap + b1
-    k1_extrap = m1 * 2 + b1
+    # k1_extrap = m1 * 2 + b1
+    k1_extrap = k1_aa[0]
+    print(k1_aa[:])
+    print(x_aa)
     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
     print('m1', m1)
     ax1.plot(x_extrap, k1_fit, 'C0-', label=None)
@@ -188,9 +194,11 @@ if not df_with_aa.empty:
     # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
     # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
 
-    plot_overlay = False
+    plot_overlay = True
     # Overlay Non-AA data on the AA plot
+    print(df_no_aa)
     if not df_no_aa.empty and plot_overlay:
+        print('hello')
         x_no_aa_overlay = df_no_aa['Power (mE)'].values
 
         # K3 (no AA) overlay
@@ -269,12 +277,12 @@ if not df_with_aa.empty:
     # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
     # log scale
     # ax1.text(1.9, 0.25, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', fontsize=6)
-    ax1.text(2.1, k1_extrap*1.5, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
-    ax1.text(2.1, k3_extrap*0.6, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
-    ax1.text(2.1, k4_extrap*0.45, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
-    ax1.text(2.1, 2, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, bbox_to_anchor=(0.9, 0))
-    ax1.axvline(2, color='gray', linestyle='--', linewidth=1)
+    ax1.text(1.5, k1_extrap*1.7, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
+    ax1.text(1.4, k3_extrap*2.2, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
+    ax1.text(1.5, k4_extrap*0.4, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
+    ax1.text(1.7, 1.3, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False)#, bbox_to_anchor=(0.95, 0))
+    # ax1.axvline(2, color='gray', linestyle='--', linewidth=1)
 
     # sns.despine()
     # ax1.set_xlim(1, 1000)
@@ -282,7 +290,7 @@ if not df_with_aa.empty:
     plot_file_aa = os.path.join(base_data_dir, 'k_values_vs_power_with_AA.png')
     # plt.savefig(plot_file_aa, dpi=300, bbox_inches='tight')
     print(f"With AA plot saved to: {plot_file_aa}")
-    # plt.show()
+    plt.show()
 
 # Create unified figure for "without AA" data
 if not df_no_aa.empty:

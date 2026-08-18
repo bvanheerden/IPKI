@@ -8,14 +8,10 @@ if project_root not in sys.path:
 
 import re
 import numpy as np
-import h5py
-import json
 import pickle
 import pandas as pd
 from scipy.optimize import curve_fit
 from matplotlib import pyplot as plt
-import matplotlib.ticker as mticker
-import seaborn as sns
 
 import utils
 from kinetic_models import kinetic_model
@@ -23,7 +19,8 @@ from kinetic_models import kinetic_model
 utils.setup_plotting()
 
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/1 August 2026/Thylakoid power study'
 
 # Default parameters (used if no config file is found)
 default_params = {
@@ -38,7 +35,7 @@ default_params = {
 onlyplot = False
 use_individual_fits = True  # Set to True for individual trace fitting error estimation
 load_saved_data = False  # Set to True to skip fitting and load from CSV
-use_pickle = True  # Set to True to save/load processed traces
+use_pickle = False  # Set to True to save/load processed traces
 fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for that power
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 
@@ -324,7 +321,7 @@ if not load_saved_data and all_datasets:
         print(upper_bounds)
 
         popt_global, _ = curve_fit(global_fitfunc, t_dummy, y_data_combined, p0=p0_global, 
-                              bounds=(lower_bounds, upper_bounds), verbose=2, max_nfev=1000, ftol=1e-6, xtol=1e-6)
+                              bounds=(lower_bounds, upper_bounds), verbose=2, maxfev=1000, ftol=1e-6, xtol=1e-6)
         
         k2_shared_val = popt_global[0]
         print(f"  Stage 1 Global Fit Results: k2={k2_shared_val:.4f}")
@@ -363,7 +360,7 @@ if not load_saved_data and all_datasets:
 
             # Main fit for this dataset
             popt_local, _ = curve_fit(local_fitfunc, ds['t'], ds['norm_pulsephotons'], p0=p0_local,
-                                      bounds=(l_local, u_local), max_nfev=2000, verbose=1, xtol=1e-6, ftol=1e-6)
+                                      bounds=(l_local, u_local), maxfev=2000, verbose=1, xtol=1e-6, ftol=1e-6)
             
             # Individual trace fitting for local fit
             individual_fit_results = []
@@ -376,7 +373,7 @@ if not load_saved_data and all_datasets:
                     
                     try:
                         popt_j, _ = curve_fit(local_fitfunc, ds['t'], y_trace, p0=p0_local, bounds=(l_local, u_local),
-                                              max_nfev=100)
+                                              maxfev=100)
                         individual_fit_results.append(popt_j)
                         print(popt_j)
                         

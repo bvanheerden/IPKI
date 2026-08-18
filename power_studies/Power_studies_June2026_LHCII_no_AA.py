@@ -68,7 +68,7 @@ def fittrace(data_dir, partnums, onlen, offlen, startind, p0, low_value_threshol
         pcov = None
     else:
         popt, pcov, *extra = curve_fit(fitfunc, t, norm_pulsephotons, p0=p0, bounds=([0, 0, 0, 0, 0, 0.95, 0],
-                                       [1, 10, 10, 1, 10, 1.05, 1]), verbose=2, max_nfev=100)
+                                       [1, 10, 10, 1, 10, 1.05, 1]), verbose=2, maxfev=100)
 
     k_list = popt
     tau_list = [1 / k if k != 0 else np.nan for k in k_list[:5]]

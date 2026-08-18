@@ -167,7 +167,7 @@ if not load_saved_data and all_datasets:
         try:
             # Main fit for this dataset
             res_fit = curve_fit(local_fitfunc, ds['t'], ds['norm_pulsephotons'], p0=p0_local,
-                                      bounds=(l_local, u_local), max_nfev=2000)
+                                      bounds=(l_local, u_local), maxfev=2000)
             popt_local = res_fit[0]
             
             # Individual trace fitting for error estimation
@@ -177,7 +177,7 @@ if not load_saved_data and all_datasets:
                 print(f"    Performing individual fits for {n_traces} traces...")
                 for j in range(n_traces):
                     try:
-                        res_j = curve_fit(local_fitfunc, ds['t'], ds['all_traces'][j], p0=p0_local, bounds=(l_local, u_local), max_nfev=500)
+                        res_j = curve_fit(local_fitfunc, ds['t'], ds['all_traces'][j], p0=p0_local, bounds=(l_local, u_local), maxfev=500)
                         popt_j = res_j[0]
                         individual_fit_results.append(popt_j)
                     except Exception as e:

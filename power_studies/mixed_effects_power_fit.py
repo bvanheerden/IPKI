@@ -18,17 +18,24 @@ from kinetic_models import kinetic_model
 
 utils.setup_plotting()
 
-base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
+base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/1 August 2026/Thylakoid power study'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/31 July 2026/Thylakoid power study'
 
 # Mixed-effects regularization strengths (1/sigma)
 # Higher weight = more "global" (less variation between powers)
 K2_PENALTY_WEIGHT = 1.0
-QF_PENALTY_WEIGHT = 10.0
+QF_PENALTY_WEIGHT = 1.0
 F_PENALTY_WEIGHT = 1.0
 
 # Default parameters (used if no config file is found)
 # k1, k2, k2_l, k3, k4, q_sum, q_frac
 default_params = {
+    'onlen': 50,
+    'offlen': 600,
+    'startind': 0,
+    'partlist': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    'low_value_threshold': None,
     'p0': [1, 1, 0.2, 0.2, 2, 1.0, 0.23],
     'lower_bounds': None, # Can be set per power level in config.json
     'upper_bounds': None,
@@ -82,7 +89,11 @@ else:
             
             t = np.linspace(0, (len(norm_pulsephotons) - 1) * timestep, len(norm_pulsephotons))
             
-            t_phases_len = (params['onlen'], params['offlen'], params['onlen'], params['offlen'], params['onlen'])
+            onlen = params['onlen']
+            onlen_first = params.get('onlen_first', onlen)
+            print(onlen, onlen_first)
+            offlen = params['offlen']
+            t_phases_len = (onlen_first, offlen, onlen, offlen, onlen)
             all_datasets.append({
                 'power': power_val,
                 'power_str': power_str,
@@ -113,10 +124,20 @@ if all_datasets:
 
     final_results = []
 
-    for group_name, datasets in groups:
-        print(f"\nProcessing {group_name} group ({len(datasets)} datasets)...")
+    for group_name, datasets_all in groups:
+        # Lowest power levels to exclude from global fit
+        low_power_levels = [2.0, 5.0, 11.0]
+        # low_power_levels = []
+        datasets = [ds for ds in datasets_all if ds['power'] not in low_power_levels]
+        datasets_excluded = [ds for ds in datasets_all if ds['power'] in low_power_levels]
+        
+        print(f"\nProcessing {group_name} group ({len(datasets)} global, {len(datasets_excluded)} excluded)...")
         n_ds = len(datasets)
         
+        if n_ds == 0:
+            print(f"  Warning: No high-power datasets for global fit in {group_name}. Skipping group.")
+            continue
+
         # Prepare experimental data and dummy t
         n_penalties_per_ds = 4 if USE_2Q_MODEL else 2
         y_data_combined = np.concatenate([ds['norm_pulsephotons'] for ds in datasets] + [np.zeros(n_penalties_per_ds * n_ds)])
@@ -169,6 +190,7 @@ if all_datasets:
                 
                 fit_results = []
                 penalties = []
+                epsilon = 1e-6
                 
                 for i in range(self.n_ds):
                     ds = self.datasets[i]
@@ -221,19 +243,18 @@ if all_datasets:
                         self.last_params[i] = ds_params
                     
                     fit_results.append(self.cache[i])
-                    # Penalty terms: W * (parameter - mean)
+                    # Penalty terms: W * (log(parameter) - log(mean))
                     if USE_2Q_MODEL:
-                        penalties.append(K2_PENALTY_WEIGHT * (ds_params[1] - kr1_mean))
-                        penalties.append(K2_PENALTY_WEIGHT * (ds_params[2] - kr2_mean))
-                        penalties.append(F_PENALTY_WEIGHT * (ds_params[5] - f_mean))
-                        penalties.append(QF_PENALTY_WEIGHT * (ds_params[7] - qf_mean))
+                        penalties.append(K2_PENALTY_WEIGHT * (np.log(ds_params[1] + epsilon) - np.log(kr1_mean + epsilon)))
+                        penalties.append(K2_PENALTY_WEIGHT * (np.log(ds_params[2] + epsilon) - np.log(kr2_mean + epsilon)))
+                        penalties.append(F_PENALTY_WEIGHT * (np.log(ds_params[5] + epsilon) - np.log(f_mean + epsilon)))
+                        penalties.append(QF_PENALTY_WEIGHT * (np.log(ds_params[7] + epsilon) - np.log(qf_mean + epsilon)))
                     else:
-                        penalties.append(K2_PENALTY_WEIGHT * (ds_params[1] - k2_mean))
-                        penalties.append(QF_PENALTY_WEIGHT * (ds_params[n_ds_params - 1] - qf_mean))
+                        penalties.append(K2_PENALTY_WEIGHT * (np.log(ds_params[1] + epsilon) - np.log(k2_mean + epsilon)))
+                        penalties.append(QF_PENALTY_WEIGHT * (np.log(ds_params[n_ds_params - 1] + epsilon) - np.log(qf_mean + epsilon)))
                 
                 # Compare in log-space: return log(model)
                 # Add epsilon to avoid log(0)
-                epsilon = 1e-6
                 log_model = np.log(np.concatenate(fit_results) + epsilon)
                 return np.concatenate([log_model, np.array(penalties)])
 
@@ -246,7 +267,7 @@ if all_datasets:
             upper_bounds = [1, 10, 1.0, 0.5]
         else:
             p0_global = [2 if group_name == 'AA' else 0.3, 0.23] # Global means: k2_mean, qf_mean
-            lower_bounds = [0, 0.19]
+            lower_bounds = [0, 0]
             upper_bounds = [10 if group_name == 'AA' else 0.8, 0.3]
         
         for ds in datasets:
@@ -360,12 +381,112 @@ if all_datasets:
             k2_mean_val, qf_mean_val = popt[0:2]
             offset = 2
 
-        for i in range(n_ds):
-            ds = datasets[i]
-            k_vals = popt[offset:offset + n_ds_params]
+        global_ds_idx = 0
+        for ds in datasets_all:
+            is_excluded = ds['power'] in low_power_levels
             
-            # Default error bars from covariance matrix
-            k_errs_from_cov = perr[offset:offset + n_ds_params]
+            if not is_excluded:
+                k_vals = popt[offset:offset + n_ds_params]
+                k_errs_from_cov = perr[offset:offset + n_ds_params]
+                # Increment offset only for global datasets
+                offset += n_ds_params
+                global_ds_idx += 1
+            else:
+                # Local fit for excluded dataset using global means
+                print(f"    Performing local fit for excluded power {ds['power']} mE ({ds['folder_name']})...")
+                
+                # Reconstruct bounds and p0 for this dataset
+                dp0 = ds['params']['p0']
+                custom_lower = ds['params'].get('lower_bounds')
+                custom_upper = ds['params'].get('upper_bounds')
+                
+                # Reconstruct full k_vals initial guess and bounds as in the global fit
+                if USE_2Q_MODEL:
+                    if len(dp0) >= 8: ds_p0_full = np.array(dp0[:8])
+                    else: ds_p0_full = np.array([dp0[0], dp0[1], 0.03, dp0[3], dp0[4], 0.5, dp0[5], dp0[6]])
+                    
+                    if custom_lower and len(custom_lower) >= 8: ds_lower_full = np.array(custom_lower[:8])
+                    else: ds_lower_full = np.array([0, 0, 0, 0, 0, 0, 0.95, 0.0])
+                    
+                    if custom_upper and len(custom_upper) >= 8: ds_upper_full = np.array(custom_upper[:8])
+                    else: ds_upper_full = np.array([5, 10, 20, 0.5, 6, 1.0, 1.05, 0.5])
+                    
+                    opt_indices = [0, 3, 4, 6]
+                    fixed_indices = [1, 2, 5, 7]
+                    fixed_values = [kr1_mean_val, kr2_mean_val, f_mean_val, qf_mean_val]
+                else:
+                    if FIT_K2_LIGHT:
+                        ds_p0_full = np.array([dp0[0], dp0[1], dp0[2] if group_name != 'AA' else 0.0, dp0[3], dp0[4], dp0[5] if len(dp0)>5 else 1.0, dp0[6] if len(dp0)>6 else 0.23])
+                        ds_lower_full = np.array([0, 0, 0, 0, 0.08, 0.95, 0.1])
+                        ds_upper_full = np.array([5, 10, 15 if group_name != 'AA' else 1e-9, 0.5, 3, 1.05, 0.3])
+                        if custom_lower and len(custom_lower) >= 7: ds_lower_full = np.array(custom_lower[:7])
+                        if custom_upper and len(custom_upper) >= 7: ds_upper_full = np.array(custom_upper[:7])
+                        
+                        opt_indices = [0, 2, 3, 4, 5]
+                        fixed_indices = [1, 6]
+                        fixed_values = [k2_mean_val, qf_mean_val]
+                    else:
+                        ds_p0_full = np.array([dp0[0], dp0[1], dp0[3], dp0[4], dp0[5] if len(dp0)>5 else 1.0, dp0[6] if len(dp0)>6 else 0.23])
+                        ds_lower_full = np.array([0, 0, 0, 0, 0.95, 0.1])
+                        ds_upper_full = np.array([2, 3, 0.2, 5, 1.05, 0.3])
+                        if custom_lower:
+                            if len(custom_lower) >= 7: ds_lower_full = np.array([custom_lower[0], custom_lower[1], custom_lower[3], custom_lower[4], custom_lower[5], custom_lower[6]])
+                            elif len(custom_lower) >= 5: ds_lower_full = np.array([custom_lower[0], custom_lower[1], custom_lower[3], custom_lower[4], 0.95, 0.1])
+                            elif len(custom_lower) >= 4: ds_lower_full[:4] = custom_lower[:4]
+                        if custom_upper:
+                            if len(custom_upper) >= 7: ds_upper_full = np.array([custom_upper[0], custom_upper[1], custom_upper[3], custom_upper[4], custom_upper[5], custom_upper[6]])
+                            elif len(custom_upper) >= 5: ds_upper_full = np.array([custom_upper[0], custom_upper[1], custom_upper[3], custom_upper[4], 1.05, 0.3])
+                            elif len(custom_upper) >= 4: ds_upper_full[:4] = custom_upper[:4]
+
+                        opt_indices = [0, 2, 3, 4]
+                        fixed_indices = [1, 5]
+                        fixed_values = [k2_mean_val, qf_mean_val]
+                
+                ds_p0_opt = ds_p0_full[opt_indices]
+                ds_lower_opt = ds_lower_full[opt_indices]
+                ds_upper_opt = ds_upper_full[opt_indices]
+
+                # Transition times
+                t_on1, t_off1, t_on2, t_off2, t_on3 = ds['t_phases']
+                t_dark, t_light, t_dark2, t_light2, t_dark3 = t_on1, t_on1+t_off1, t_on1+t_off1+t_on2, t_on1+t_off1+t_on2+t_off2, t_on1+t_off1+t_on2+t_off2+t_on3
+
+                def local_fit_model(t_m, *params_opt):
+                    p_full = np.zeros(len(ds_p0_full))
+                    p_full[opt_indices] = params_opt
+                    p_full[fixed_indices] = fixed_values
+                    if USE_2Q_MODEL:
+                        k1, kr1, kr2, k3, k4, f, q_sum, q_f = p_full
+                        s1, s2, s3, s4, s5, s6 = kinetic_model.modelfunc_2q(t_m, k1, kr1, kr2, k3, k4, f, q_sum, q_f, t_dark, t_light, t_dark2, t_light2, t_dark3)
+                        res = np.concatenate((s1.y[3]+s1.y[4], s2.y[3][1:]+s2.y[4][1:], s3.y[3][1:]+s3.y[4][1:], s4.y[3][1:]+s4.y[4][1:], s5.y[3][1:]+s5.y[4][1:], s6.y[3][1:]+s6.y[4][1:]))
+                    else:
+                        if FIT_K2_LIGHT: k1, k2, k2_light, k3, k4, q_sum, q_f = p_full
+                        else: k1, k2, k3, k4, q_sum, q_f = p_full; k2_light = 0
+                        s1, s2, s3, s4, s5, s6 = kinetic_model.modelfunc(t_m, k1, k2, k3, k4, q_sum, q_f, t_dark, t_light, t_dark2, t_light2, t_dark3, k2_light=k2_light)
+                        res = np.concatenate((s1.y[2]+s1.y[3], s2.y[2][1:]+s2.y[3][1:], s3.y[2][1:]+s3.y[3][1:], s4.y[2][1:]+s4.y[3][1:], s5.y[2][1:]+s5.y[3][1:], s6.y[2][1:]+s6.y[3][1:]))
+                    if len(res) < len(t_m): res = np.pad(res, (0, len(t_m) - len(res)), mode='edge')
+                    else: res = res[:len(t_m)]
+                    return np.log(res + 1e-6)
+
+                try:
+                    popt_local_opt, pcov_local_opt = curve_fit(local_fit_model, ds['t'], np.log(ds['norm_pulsephotons'] + 1e-6), p0=ds_p0_opt, bounds=(ds_lower_opt, ds_upper_opt))
+                    k_vals = np.zeros(len(ds_p0_full))
+                    k_vals[opt_indices] = popt_local_opt
+                    k_vals[fixed_indices] = fixed_values
+                    k_errs_from_cov = np.zeros(len(ds_p0_full))
+                    k_errs_from_cov[opt_indices] = np.sqrt(np.diag(pcov_local_opt))
+                except Exception as e:
+                    print(f"      Warning: Local fit failed for {ds['folder_name']}: {e}")
+                    k_vals = ds_p0_full
+                    k_errs_from_cov = np.zeros(len(ds_p0_full))
+
+            # Bounds for jackknife/individual fits
+            if not is_excluded:
+                ds_lower = lower_bounds[offset-n_ds_params:offset]
+                ds_upper = upper_bounds[offset-n_ds_params:offset]
+            else:
+                ds_lower = ds_lower_full
+                ds_upper = ds_upper_full
+
             tau_errs_from_cov = [k_errs_from_cov[j] / (k_vals[j]**2) if k_vals[j] != 0 else np.nan for j in range(5)]
             
             k_errs = k_errs_from_cov
@@ -379,8 +500,6 @@ if all_datasets:
                     print(f"    Fitting {len(ds['individual_traces'])} individual traces for {ds['folder_name']}...")
                 
                 individual_popt_list = []
-                ds_lower = lower_bounds[offset:offset + n_ds_params]
-                ds_upper = upper_bounds[offset:offset + n_ds_params]
                 
                 t_on1, t_off1, t_on2, t_off2, t_on3 = ds['t_phases']
                 t_dark = t_on1
@@ -390,8 +509,15 @@ if all_datasets:
                 t_dark3 = t_light2 + t_on3
                 
                 def single_trace_model(t_m, *params_fit):
+                    if is_excluded and len(params_fit) == len(opt_indices):
+                        p_full = np.zeros(len(ds_p0_full))
+                        p_full[opt_indices] = params_fit
+                        p_full[fixed_indices] = fixed_values
+                    else:
+                        p_full = params_fit
+
                     if USE_2Q_MODEL:
-                        k1, kr1, kr2, k3, k4, f, q_sum, q_f = params_fit
+                        k1, kr1, kr2, k3, k4, f, q_sum, q_f = p_full
                         s1, s2, s3, s4, s5, s6 = kinetic_model.modelfunc_2q(
                             t_m, k1, kr1, kr2, k3, k4, f, q_sum, q_f,
                             t_dark, t_light, t_dark2, t_light2, t_dark3
@@ -400,9 +526,9 @@ if all_datasets:
                                                s4.y[3][1:]+s4.y[4][1:], s5.y[3][1:]+s5.y[4][1:], s6.y[3][1:]+s6.y[4][1:]))
                     else:
                         if FIT_K2_LIGHT:
-                            k1, k2, k2_light, k3, k4, q_sum, q_f = params_fit
+                            k1, k2, k2_light, k3, k4, q_sum, q_f = p_full
                         else:
-                            k1, k2, k3, k4, q_sum, q_f = params_fit
+                            k1, k2, k3, k4, q_sum, q_f = p_full
                             k2_light = 0
                         s1, s2, s3, s4, s5, s6 = kinetic_model.modelfunc(
                             t_m, k1, k2, k3, k4, q_sum, q_f,
@@ -430,8 +556,22 @@ if all_datasets:
                         # Use linear-space initial guess and bounds
                         tr_to_fit_log = np.log(tr_to_fit + 1e-6)
                         
-                        popt_ind, _ = curve_fit(single_trace_model, ds['t'], tr_to_fit_log, p0=k_vals, 
-                                                bounds=(ds_lower, ds_upper), max_nfev=1000)
+                        if is_excluded:
+                            p0_ind = k_vals[opt_indices]
+                            bounds_ind = (ds_lower[opt_indices], ds_upper[opt_indices])
+                        else:
+                            p0_ind = k_vals
+                            bounds_ind = (ds_lower, ds_upper)
+
+                        popt_ind_opt, _ = curve_fit(single_trace_model, ds['t'], tr_to_fit_log, p0=p0_ind, 
+                                                bounds=bounds_ind, max_nfev=1000)
+                        
+                        if is_excluded:
+                            popt_ind = np.zeros(len(ds_p0_full))
+                            popt_ind[opt_indices] = popt_ind_opt
+                            popt_ind[fixed_indices] = fixed_values
+                        else:
+                            popt_ind = popt_ind_opt
                         
                         individual_popt_list.append(popt_ind)
                         
@@ -488,8 +628,6 @@ if all_datasets:
                         tau_errs = np.nanstd(individual_taus, axis=0)
                         tau_errs /= np.sqrt(len(individual_taus)) # Standard error
 
-            offset += n_ds_params
-            
             if USE_2Q_MODEL:
                 k1, kr1, kr2, k3, k4, f_val, q_sum, q_f = k_vals
                 pk1, pkr1, pkr2, pk3, pk4, pf, pqs, pqf = k_errs

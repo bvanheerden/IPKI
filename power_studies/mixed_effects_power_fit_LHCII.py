@@ -267,9 +267,12 @@ if all_datasets:
         p0_scaled = np.array(p0_global) / scales
         lower_scaled = np.array(lower_bounds) / scales
         upper_scaled = np.array(upper_bounds) / scales
+        
+        # Ensure p0 is within bounds (clipping to avoid "infeasible x0")
+        p0_scaled = np.clip(p0_scaled, lower_scaled, upper_scaled)
 
         popt_scaled, pcov_scaled = curve_fit(global_fit_obj, t_dummy, y_data_combined, p0=p0_scaled, 
-                                             bounds=(lower_scaled, upper_scaled), verbose=2, max_nfev=2500,
+                                             bounds=(lower_scaled, upper_scaled), verbose=2, maxfev=2500,
                                              ftol=1e-6, xtol=1e-6, diff_step=0.1)
         
         popt = popt_scaled * scales
@@ -286,13 +289,28 @@ if all_datasets:
             k2_mean_val, qf_mean_val = popt[0:2]
             offset = 2
 
-        for i in range(n_ds):
-            ds = datasets[i]
-            k_vals = popt[offset:offset + n_ds_params]
+            # Default k_vals and k_errs in case everything fails
+            if USE_2Q_MODEL:
+                k_vals = np.full(8, np.nan)
+                k_errs = np.full(8, np.nan)
+                tau_errs = [np.nan] * 5
+            else:
+                k_vals = np.full(7, np.nan)
+                k_errs = np.full(7, np.nan)
+                tau_errs = [np.nan] * 5
+
+            for i in range(n_ds):
+                ds = datasets[i]
+                k_vals = popt[offset:offset + n_ds_params]
             
             # Default error bars from covariance matrix
             k_errs_from_cov = perr[offset:offset + n_ds_params]
-            tau_errs_from_cov = [k_errs_from_cov[j] / (k_vals[j]**2) if k_vals[j] != 0 else np.nan for j in range(5)]
+            if USE_2Q_MODEL:
+                tau_errs_from_cov = [k_errs_from_cov[j] / (k_vals[j]**2) if k_vals[j] != 0 else np.nan for j in range(5)]
+            else:
+                # k_vals has [k1, k2, k2_light, k3, k4, q_sum, q_f]
+                # k_errs_from_cov indices for k1, k2, k2_light, k3, k4 are 0, 1, 2, 3, 4
+                tau_errs_from_cov = [k_errs_from_cov[j] / (k_vals[j]**2) if k_vals[j] != 0 else np.nan for j in range(5)]
             
             k_errs = k_errs_from_cov
             tau_errs = tau_errs_from_cov
@@ -346,8 +364,11 @@ if all_datasets:
                         else:
                             tr_to_fit = ds['individual_traces'][idx]
 
-                        popt_ind, _ = curve_fit(single_trace_model, ds['t'], tr_to_fit, p0=k_vals, 
-                                                bounds=(ds_lower, ds_upper), max_nfev=1000)
+                        # Ensure p0 is within bounds (clipping to avoid "infeasible x0")
+                        p0_ind = np.clip(k_vals, ds_lower, ds_upper)
+
+                        popt_ind, _ = curve_fit(single_trace_model, ds['t'], tr_to_fit, p0=p0_ind, 
+                                                bounds=(ds_lower, ds_upper), maxfev=1000)
                         individual_popt_list.append(popt_ind)
                     except Exception as e:
                         print(f"      Warning: Trace fit failed at index {idx}: {e}")
@@ -373,12 +394,20 @@ if all_datasets:
             offset += n_ds_params
             
             if USE_2Q_MODEL:
-                k1, kr1, kr2, k3, k4, f_val, q_sum, q_f = k_vals
-                pk1, pkr1, pkr2, pk3, pk4, pf, pqs, pqf = k_errs
+                if len(k_vals) >= 8:
+                    k1, kr1, kr2, k3, k4, f_val, q_sum, q_f = k_vals
+                    pk1, pkr1, pkr2, pk3, pk4, pf, pqs, pqf = k_errs
+                else:
+                    k1 = kr1 = kr2 = k3 = k4 = f_val = q_sum = q_f = np.nan
+                    pk1 = pkr1 = pkr2 = pk3 = pk4 = pf = pqs = pqf = np.nan
                 tau_list = [1/k if k != 0 else np.nan for k in [k1, kr1, kr2, k3, k4]]
             else:
-                k1, k2, k2_light, k3, k4, q_sum, q_f = k_vals
-                pk1, pk2, pk2l, pk3, pk4, pqs, pqf = k_errs
+                if len(k_vals) >= 7:
+                    k1, k2, k2_light, k3, k4, q_sum, q_f = k_vals
+                    pk1, pk2, pk2l, pk3, pk4, pqs, pqf = k_errs
+                else:
+                    k1 = k2 = k2_light = k3 = k4 = q_sum = q_f = np.nan
+                    pk1 = pk2 = pk2l = pk3 = pk4 = pqs = pqf = np.nan
                 tau_list = [1/k if k != 0 else np.nan for k in [k1, k2, k2_light, k3, k4]]
             
             def fmt(v, e): return f"{v:.3g} ± {e:.3g}" if np.isfinite(e) else f"{v:.3g}"
