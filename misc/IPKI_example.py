@@ -11,7 +11,8 @@ import utils
 
 utils.setup_plotting()
 
-base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
+# base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
+base_dir = r'C:\\Users\\bertu\\Desktop'
 dataset_folder = '301 mE'
 dataset_name = '301 mE'
 
@@ -166,7 +167,7 @@ try:
 
     # Create plot
     print("\nCreating plot...")
-    fig, ax = plt.subplots(figsize=(90/25.4, 50/25.4))
+    fig, ax = plt.subplots(figsize=(90/25.4, 65/25.4))
 
     # Add light/dark bar at the top
     # Phases: [0, t_dark] Light, [t_dark, t_light] Dark, [t_light, t_dark2] Light, ...
@@ -303,7 +304,7 @@ try:
         ax_thy_naa.set_xlabel('Time (s)')
         plt.tight_layout()
 
-    plt.show()
+
 
 except Exception as e:
     print(f"✗ Error processing {dataset_name}: {str(e)}")

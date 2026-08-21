@@ -8,7 +8,8 @@ import utils
 
 utils.setup_plotting()
 
-data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Chl less glycerol'
+# data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Chl less glycerol'
+data_dir = r'C:\\Users\\bertu\\Desktop\\Chl less glycerol'
 
 # timestep = 0.05  # time step of intensity trace in seconds
 
@@ -60,8 +61,8 @@ def fittrace(partnums):
 
 norm_pulsephotons, t = fittrace([0])
 
-plt.figure(figsize = (70/25.4, 50/25.4))
-plt.plot(t, norm_pulsephotons[:], '-', color='C0', lw=1.5)
+plt.figure(figsize = (50/25.4, 40/25.4))
+plt.plot(t, norm_pulsephotons[:], '-', color='k', lw=1.5)
 
 plt.xlabel('Time (s)')
 plt.ylabel('Normalized fluorescence')

@@ -19,7 +19,8 @@ from kinetic_models import kinetic_model
 utils.setup_plotting()
 
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/4 June 2026/Thylakoid power study'
-base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/1 August 2026/Thylakoid power study'
+# base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/1 August 2026/Thylakoid power study'
+base_data_dir = r'C:\\Users\\bertu\\Desktop\\1 August 2026\\Thylakoid power study'
 # base_data_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/31 July 2026/Thylakoid power study'
 
 # Mixed-effects regularization strengths (1/sigma)
@@ -41,7 +42,7 @@ default_params = {
     'upper_bounds': None,
 }
 
-use_pickle = False  # Set to True to save/load processed traces
+use_pickle = True  # Set to True to save/load processed traces
 USE_2Q_MODEL = False  # Set to True to use the 5-state kinetic_2q model
 FIT_K2_LIGHT = False  # Set to True to fit k2_light, False to fix it at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
@@ -267,7 +268,7 @@ if all_datasets:
             upper_bounds = [1, 10, 1.0, 0.5]
         else:
             p0_global = [2 if group_name == 'AA' else 0.3, 0.23] # Global means: k2_mean, qf_mean
-            lower_bounds = [0, 0]
+            lower_bounds = [0 if group_name == 'AA' else 0, 0]
             upper_bounds = [10 if group_name == 'AA' else 0.8, 0.3]
         
         for ds in datasets:
@@ -730,10 +731,10 @@ if all_datasets:
     df_with_aa = df[df['AA'] == 'Yes'].sort_values('Power (mE)')
 
     results_dir = os.path.join(project_root, 'results')
-    path = os.path.join(results_dir, '../results/data_no_aa_1q.pkl')
+    path = os.path.join(results_dir, r'data_no_aa_1q.pkl')
     with open(path, 'wb') as f:
         pickle.dump(df_no_aa, f)
-    path = os.path.join(results_dir, '../results/data_with_aa_1q.pkl')
+    path = os.path.join(results_dir, r'data_with_aa_1q.pkl')
     with open(path, 'wb') as f:
         pickle.dump(df_with_aa, f)
     

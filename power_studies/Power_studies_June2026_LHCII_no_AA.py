@@ -237,12 +237,16 @@ if results:
 
     # Helper to get numeric values and errors from the formatted strings
     def get_numeric(series):
-        return series.str.split(' ±').str[0].astype(float)
+        if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series) or series.dtype in ['O', 'object', 'string', object]:
+            return series.astype(str).str.split(' ±').str[0].astype(float)
+        return series.astype(float)
 
     def get_error(series):
-        # Extract the error part, handle cases where no error is present
-        parts = series.str.split(' ±')
-        return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
+        if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series) or series.dtype in ['O', 'object', 'string', object]:
+            # Extract the error part, handle cases where no error is present
+            parts = series.astype(str).str.split(' ±')
+            return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
+        return pd.Series(0.0, index=series.index)
 
     # Calculate means for numeric columns
     mean_row = []

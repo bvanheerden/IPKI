@@ -21,14 +21,14 @@ import utils
 utils.setup_plotting()
 
 def get_numeric(series):
-    if series.dtype == 'O':
-        return series.str.split(' ±').str[0].astype(float)
+    if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series) or series.dtype in ['O', 'object', 'string', object]:
+        return series.astype(str).str.split(' ±').str[0].astype(float)
     return series.astype(float)
 
 def get_error(series):
-    if series.dtype == 'O':
+    if pd.api.types.is_object_dtype(series) or pd.api.types.is_string_dtype(series) or series.dtype in ['O', 'object', 'string', object]:
         # Extract the error part, handle cases where no error is present
-        parts = series.str.split(' ±')
+        parts = series.astype(str).str.split(' ±')
         return parts.apply(lambda x: float(x[1]) if len(x) > 1 else 0.0)
     return pd.Series(0.0, index=series.index)
 
@@ -85,7 +85,7 @@ if use_csv:
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        path = os.path.join(results_dir, '../results/data_no_aa_1q.pkl')
+        path = os.path.join(results_dir, 'data_no_aa_1q.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
             df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -94,7 +94,7 @@ else:
         print("data_no_aa.pkl not found in results/")
 
     try:
-        path = os.path.join(results_dir, '../results/data_with_aa_1q.pkl')
+        path = os.path.join(results_dir, 'data_with_aa_1q.pkl')
         with open(path, 'rb') as f:
             df_with_aa = pickle.load(f)
             df_with_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -252,7 +252,7 @@ if not df_with_aa.empty:
         # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_no_aa, 'C3--', alpha=0.3, label=None)
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
+    ax1.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
 
     ax1.set_xscale('log')
     ax1.set_yscale('log')
@@ -393,7 +393,7 @@ if not df_no_aa.empty:
         ax1.axhline(k2_lhcii, color='C3', linestyle='--', alpha=0.2)
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
+    ax1.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
 
     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
     ax1.set_xscale('log')

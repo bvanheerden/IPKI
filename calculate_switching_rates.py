@@ -160,9 +160,9 @@ def plot_switching_rates(summary, dataset_name, output_plot):
     std_errs = [summary[c]['std_err'] for c in conditions_sorted]
 
     if dataset_name == "SMS_blinking":
-        plt.figure(figsize=(90/25.4, 40/25.4))
+        plt.figure(figsize=(120/25.4, 40/25.4))
     else:
-        plt.figure(figsize=(40/25.4, 40/25.4))
+        plt.figure(figsize=(50/25.4, 40/25.4))
     
     # Color logic
     if dataset_name == "SMS_blinking":

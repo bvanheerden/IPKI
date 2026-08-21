@@ -16,8 +16,8 @@ plt.rcParams.update({"font.size": fontsize,
                      'xtick.labelsize': fontsize,
                      'legend.fontsize': fontsize,
                      })
-fig1, ax2 = plt.subplots(figsize=(60/25.4, 40/25.4))
-fig2 = plt.figure(figsize=(60/25.4, 40/25.4))
+fig1, ax2 = plt.subplots(figsize=(85/25.4, 60/25.4))
+fig2 = plt.figure(figsize=(85/25.4, 60/25.4))
 # ax_thy_aa = brokenaxes(ylims=((0, 0.25), (0.7, 0.9)), fig=fig2, hspace=0.05, d=0)
 ax_thy_aa = fig2.add_subplot(111)
 
@@ -50,10 +50,11 @@ def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
             if lowlight:
                 k1, k2, k3, k4 = 0.096, 3.66, 0.0012, 0.083
             else:
-                k1, k2, k3, k4 = 1.64, 3.66, 0.05, 0.933
+                k1, k2, k3, k4 = 1.64, 3.66, 0.05, 0.933  # Thylakoid
+                k1, k2, k3, k4 = 0.1, 0.18, 0.03, 0.82  # LHCII 301 mE
         else:
             k1, k2, k3, k4 = 0.232, 0.264, 0.17, 2.99
-        res = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.2, t_dark, t_light, t_dark2, t_light2,
+        res = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.28, t_dark, t_light, t_dark2, t_light2,
                                       t_dark3, k2_light=None, return_populations=True)
         return res
 
@@ -75,15 +76,14 @@ print("Fitting Thylakoid AA...")
 t_aa, pops_aa = fit_thylakoid(has_aa=True)
 
 for i in [3, 2, 1, 0]: # Order: U1, U2, Q, B
-    ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i])
+    ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i], lw=3)
     # ax_thy_aa.text(3.0, 0.76, 'Thylakoids + AA')
 
-for ax_curr in [ax2]:
+for ax_curr in [ax2, ax_thy_aa]:
     ax_curr.set_ylabel('Population fraction')
-    ax_curr.set_ylim(0, 0.9)
-ax_thy_aa.set_ylabel('Population fraction')#, labelpad=20)
+    ax_curr.set_ylim(0, 0.8)
 ax2.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.02, 1.05))
-ax_thy_aa.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.02, 1.03), ncol=2)
+ax_thy_aa.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.0, 1.0))
 
 ax2.set_xlim(0, 5)
 ax_thy_aa.set_xlim(0, 5)

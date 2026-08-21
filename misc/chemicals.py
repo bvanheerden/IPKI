@@ -17,7 +17,8 @@ import utils
 
 utils.setup_plotting()
 
-base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
+# base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
+base_dir = r'C:\\Users\\bertu\\Desktop'
 
 # Datasets to process (map display names to folder names)
 datasets = {
@@ -283,7 +284,7 @@ print("=" * 80)
 
 # Plot 2: Control with GCO Control, MV, and SOD
 print("\nCreating Plot 2: Control with Treatment Datasets...")
-fig2, ax2 = plt.subplots(figsize=(90/25.4, 60/25.4))
+fig2, ax2 = plt.subplots(figsize=(80/25.4, 70/25.4))
 
 control_treatment_datasets = ['Ambient air', 'Oxygen scavengers']
 colors_ct = {'Ambient air': 'C0', 'Oxygen scavengers': 'C1'}
