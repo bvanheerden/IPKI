@@ -42,9 +42,9 @@ default_params = {
     'upper_bounds': None,
 }
 
-use_pickle = True  # Set to True to save/load processed traces
+use_pickle = False  # Set to True to save/load processed traces
 USE_2Q_MODEL = False  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = False  # Set to True to fit k2_light, False to fix it at 0
+FIT_K2_LIGHT = True  # Set to True to fit k2_light, False to fix it at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 # Loop through all power folders and collect results
@@ -164,7 +164,7 @@ if all_datasets:
             scales = [1.0, 0.2] # k2_mean, qf_mean
             for _ in range(n_ds):
                 if FIT_K2_LIGHT:
-                    scales.extend([0.05, 1.0, 1.0, 0.1, 0.5, 1.0, 0.2]) # k1, k2, k2_light, k3, k4, q_sum, q_f
+                    scales.extend([1.0, 1.0, 1.0, 0.1, 0.5, 1.0, 0.2]) # k1, k2, k2_light, k3, k4, q_sum, q_f
                 else:
                     scales.extend([0.05, 1.0, 0.1, 0.5, 1.0, 0.2]) # k1, k2, k3, k4, q_sum, q_f
         
@@ -300,7 +300,7 @@ if all_datasets:
                 print(custom_lower)
                 print(custom_upper)
                 if FIT_K2_LIGHT:
-                    p0_global.extend([dp0[0], dp0[1], dp0[2] if group_name != 'AA' else 0.0, dp0[3], dp0[4]])
+                    p0_global.extend([dp0[0], dp0[1], dp0[2], dp0[3], dp0[4]])
                     if custom_lower and len(custom_lower) >= 5:
                         lower_bounds.extend(custom_lower[:5])
                     else:
@@ -309,7 +309,7 @@ if all_datasets:
                     if custom_upper and len(custom_upper) >= 5:
                         upper_bounds.extend(custom_upper[:5])
                     else:
-                        upper_bounds.extend([5, 10, 15 if group_name != 'AA' else 1e-9, 0.5, 3])
+                        upper_bounds.extend([5, 10, 15, 0.5, 3])
                 else:
                     p0_global.extend([dp0[0], dp0[1], dp0[3], dp0[4]])
                     if custom_lower and len(custom_lower) >= 5:
@@ -356,9 +356,11 @@ if all_datasets:
         upper_bounds = np.array(upper_bounds)
 
         print(f"  Fitting {len(p0_global)} parameters (scaled)...")
+        print(p0_global, lower_bounds, upper_bounds)
         p0_scaled = p0_global / scales
         lower_scaled = lower_bounds / scales
         upper_scaled = upper_bounds / scales
+        print(p0_scaled, lower_scaled, upper_scaled)
 
         # Log-transform the experimental data for log-scale fitting
         epsilon = 1e-6
@@ -712,12 +714,14 @@ if all_datasets:
             if len(model) < len(ds['t']): model = np.pad(model, (0, len(ds['t']) - len(model)), mode='edge')
             else: model = model[:len(ds['t'])]
 
-            plt.figure(figsize=(10, 5))
+            plt.figure(figsize=(6, 3))
             plt.plot(ds['t'], ds['norm_pulsephotons'], 'o', color='gray', markersize=3, alpha=0.5, label='Data')
             plt.plot(ds['t'], model, 'r-', linewidth=2, label='Mixed-Effects Global Fit')
             plt.title(f"Mixed-Effects Fit: {ds['folder_name']}")
+            plt.xlabel('Time (s)')
+            plt.ylabel('Normalized Photon Counts')
             plt.legend()
-            plt.savefig(os.path.join(base_data_dir, f"mixed_fit_{ds['folder_name']}.png"))
+            plt.savefig(os.path.join(base_data_dir, f"mixed_fit_{ds['folder_name']}.pdf"))
             plt.close()
 
     # Final summary and export
@@ -725,16 +729,16 @@ if all_datasets:
     print("\nSummary of Mixed-Effects Results:")
     print(df.to_string(index=False))
     
-    df.to_csv(os.path.join(base_data_dir, 'mixed_effects_results.csv'), index=False)
+    df.to_csv(os.path.join(base_data_dir, 'mixed_effects_results_k2l.csv'), index=False)
     
     df_no_aa = df[df['AA'] == 'No'].sort_values('Power (mE)')
     df_with_aa = df[df['AA'] == 'Yes'].sort_values('Power (mE)')
 
     results_dir = os.path.join(project_root, 'results')
-    path = os.path.join(results_dir, r'data_no_aa_1q.pkl')
+    path = os.path.join(results_dir, r'data_no_aa_1q_k2l.pkl')
     with open(path, 'wb') as f:
         pickle.dump(df_no_aa, f)
-    path = os.path.join(results_dir, r'data_with_aa_1q.pkl')
+    path = os.path.join(results_dir, r'data_with_aa_1q_k2l.pkl')
     with open(path, 'wb') as f:
         pickle.dump(df_with_aa, f)
     

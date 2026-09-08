@@ -12,7 +12,8 @@ import utils
 utils.setup_plotting()
 
 
-base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
+# base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
+base_dir = r'C:\\Users\\bertu\\Desktop'
 
 # Datasets to process (map display names to folder names)
 datasets = {
@@ -45,6 +46,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
     onlen_param = int(params.get('onlen', default_onlen))
     offlen_param = int(params.get('offlen', default_offlen))
     partlist_param = params.get('partlist', default_partlist)
+    print(partlist_param)
     p0_param = params.get('p0', default_p0)
     
     if startind is None:
@@ -225,7 +227,7 @@ print("\n" + "=" * 80)
 print("Creating plot...")
 print("=" * 80)
 
-fig, ax = plt.subplots(figsize=(14, 8))
+fig, ax = plt.subplots(figsize=(7, 4))
 
 plot_datasets = ['LHCII Control', 'LHCII SOD']
 colors = {'LHCII Control': 'C0', 'LHCII SOD': 'C3'}
@@ -251,7 +253,7 @@ plt.tight_layout()
 # plt.show()
 
 # Save plot
-plot_file = os.path.join(base_dir, 'control_sod_comparison.png')
+plot_file = os.path.join(base_dir, 'control_sod_comparison.pdf')
 plt.savefig(plot_file, dpi=300, bbox_inches='tight')
 print(f"Plot saved to: {plot_file}")
 plt.close(fig)

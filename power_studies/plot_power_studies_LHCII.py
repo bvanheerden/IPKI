@@ -14,6 +14,7 @@ import matplotlib.ticker as mticker
 import seaborn as sns
 
 FIT_WITH_INTERCEPT = True
+PLOT_POWER_DEPENDENT_K2 = True  # Set to True to plot power-dependent average k2 with fits, False for horizontal line
 
 import utils
 
@@ -55,6 +56,86 @@ def get_fit_bounds(x_range, m, b, cov):
     sig_y = np.sqrt(np.maximum(var_y, 0))
     return y_fit - sig_y, y_fit + sig_y
 
+def get_k2_average(df):
+    """
+    Computes average k2 and its uncertainty for a dataframe.
+    Handles 2Q model (Kr1, Kr2, f, with optional Kr1_light, Kr2_light),
+    1Q model (K2, with optional K2_light), or single Kr1.
+    """
+    if df.empty:
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+
+    # Check for 2Q model with Kr1 and Kr2
+    if 'Kr1 (s⁻¹)' in df.columns and 'Kr2 (s⁻¹)' in df.columns:
+        kr1 = get_numeric(df['Kr1 (s⁻¹)'])
+        kr1_err = get_error(df['Kr1 (s⁻¹)'])
+        kr2 = get_numeric(df['Kr2 (s⁻¹)'])
+        kr2_err = get_error(df['Kr2 (s⁻¹)'])
+        f_val = get_numeric(df['f']) if 'f' in df.columns else pd.Series(0.5, index=df.index)
+        f_err = get_error(df['f']) if 'f' in df.columns else pd.Series(0.0, index=df.index)
+
+        if 'Kr1_light (s⁻¹)' in df.columns and 'Kr2_light (s⁻¹)' in df.columns:
+            kr1_l = get_numeric(df['Kr1_light (s⁻¹)'])
+            kr1_l_err = get_error(df['Kr1_light (s⁻¹)'])
+            kr2_l = get_numeric(df['Kr2_light (s⁻¹)'])
+            kr2_l_err = get_error(df['Kr2_light (s⁻¹)'])
+            kr1_tot = kr1 + kr1_l
+            kr2_tot = kr2 + kr2_l
+            kr1_tot_err = np.sqrt(kr1_err**2 + kr1_l_err**2)
+            kr2_tot_err = np.sqrt(kr2_err**2 + kr2_l_err**2)
+        else:
+            kr1_tot = kr1
+            kr2_tot = kr2
+            kr1_tot_err = kr1_err
+            kr2_tot_err = kr2_err
+
+        tau1 = 1.0 / np.where(kr1_tot != 0, kr1_tot, np.nan)
+        tau2 = 1.0 / np.where(kr2_tot != 0, kr2_tot, np.nan)
+        tau_av = f_val * tau1 + (1.0 - f_val) * tau2
+        k2_av = 1.0 / np.where(tau_av != 0, tau_av, np.nan)
+
+        # Error propagation via delta method
+        tau1_err = kr1_tot_err / (kr1_tot**2)
+        tau2_err = kr2_tot_err / (kr2_tot**2)
+        tau_av_err = np.sqrt((f_val * tau1_err)**2 + ((1.0 - f_val) * tau2_err)**2 + ((tau1 - tau2) * f_err)**2)
+        k2_av_err = tau_av_err * (k2_av**2)
+        return pd.Series(k2_av, index=df.index), pd.Series(k2_av_err, index=df.index)
+
+    # Check for 1Q model with K2
+    elif 'K2 (s⁻¹)' in df.columns:
+        k2 = get_numeric(df['K2 (s⁻¹)'])
+        k2_err = get_error(df['K2 (s⁻¹)'])
+        if 'K2_light (s⁻¹)' in df.columns:
+            k2_l = get_numeric(df['K2_light (s⁻¹)'])
+            k2_l_err = get_error(df['K2_light (s⁻¹)'])
+            k2_tot = k2 + k2_l
+            k2_tot_err = np.sqrt(k2_err**2 + k2_l_err**2)
+        else:
+            k2_tot = k2
+            k2_tot_err = k2_err
+        return pd.Series(k2_tot, index=df.index), pd.Series(k2_tot_err, index=df.index)
+
+    # Fallback if only Kr1 is present (e.g. with AA)
+    elif 'Kr1 (s⁻¹)' in df.columns:
+        kr1 = get_numeric(df['Kr1 (s⁻¹)'])
+        kr1_err = get_error(df['Kr1 (s⁻¹)'])
+        if 'Kr1_light (s⁻¹)' in df.columns:
+            kr1_l = get_numeric(df['Kr1_light (s⁻¹)'])
+            kr1_l_err = get_error(df['Kr1_light (s⁻¹)'])
+            k2_tot = kr1 + kr1_l
+            k2_tot_err = np.sqrt(kr1_err**2 + kr1_l_err**2)
+        elif 'K2_light (s⁻¹)' in df.columns:
+            k2_l = get_numeric(df['K2_light (s⁻¹)'])
+            k2_l_err = get_error(df['K2_light (s⁻¹)'])
+            k2_tot = kr1 + k2_l
+            k2_tot_err = np.sqrt(kr1_err**2 + k2_l_err**2)
+        else:
+            k2_tot = kr1
+            k2_tot_err = kr1_err
+        return pd.Series(k2_tot, index=df.index), pd.Series(k2_tot_err, index=df.index)
+
+    return pd.Series(0.0, index=df.index), pd.Series(0.0, index=df.index)
+
 
 results_dir = os.path.join(project_root, 'results')
 df_no_aa = pd.DataFrame()
@@ -62,7 +143,7 @@ df_with_aa = pd.DataFrame()
 df_thylakoid_no_aa = pd.DataFrame()
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q_klight.pkl')
     with open(path, 'rb') as f:
         df_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -138,15 +219,19 @@ if not df_with_aa.empty:
     ax1.plot(x_extrap, m1 * x_extrap + b1, 'C0--', label=None)
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
-    k2_aa_series = get_numeric(df_with_aa['Kr1 (s⁻¹)'])
-    k2_aa = k2_aa_series.iloc[0] if not k2_aa_series.empty else 0.0
-    k2_plot = ax1.axhline(k2_aa, color='C3', linestyle='--', label=r'$k_2$')
-    k2l_aa = get_numeric(df_with_aa['K2_light (s⁻¹)'])
-    # ax1.errorbar(x_aa, k2l_aa + k2_aa,
-    #              yerr=get_error(df_with_aa['K2_light (s⁻¹)']), fmt='s',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3, label=None)
-    # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
-    # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
+    k2_aa, k2_aa_err = get_k2_average(df_with_aa)
+    if PLOT_POWER_DEPENDENT_K2:
+        k2_plot = ax1.errorbar(x_aa, k2_aa,
+                               yerr=k2_aa_err, fmt='s', label=r'$k_2$',
+                               linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
+        m2_aa, b2_aa, cov2_aa = linear_fit(x_aa, k2_aa)
+        k2_extrap = m2_aa * 2 + b2_aa
+        y_low2, y_high2 = get_fit_bounds(x_extrap, m2_aa, b2_aa, cov2_aa)
+        ax1.plot(x_extrap, m2_aa * x_extrap + b2_aa, 'C3--', label=None)
+        ax1.fill_between(x_extrap, y_low2, y_high2, color='C3', alpha=0.2)
+    else:
+        k2_aa_val = k2_aa.iloc[0] if not k2_aa.empty else 0.0
+        k2_plot = ax1.axhline(k2_aa_val, color='C3', linestyle='--', label=r'$k_2$')
 
     plot_overlay = False
     # Overlay Non-AA data on the AA plot
@@ -184,15 +269,18 @@ if not df_with_aa.empty:
         ax1.fill_between(x_extrap, y_low1_no_aa, y_high1_no_aa, color='C0', alpha=0.1)
 
         # K2_light (no AA) overlay
-        k2_no_aa_series = get_numeric(df_no_aa['K2 (s⁻¹)'])
-        k2_no_aa = k2_no_aa_series.iloc[0] if not k2_no_aa_series.empty else 0.0
-        ax1.axhline(k2_no_aa, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
-        # k2l_no_aa_overlay = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-        # ax1.errorbar(x_no_aa_overlay, k2l_no_aa_overlay + k2_no_aa,
-        #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s',
-        #              linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
-        # m2l_no_aa = np.sum(x_no_aa_overlay[:] * k2l_no_aa_overlay[:]) / np.sum(x_no_aa_overlay[:]**2)
-        # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_no_aa, 'C3--', alpha=0.3, label=None)
+        k2_no_aa_overlay, k2_no_aa_overlay_err = get_k2_average(df_no_aa)
+        if PLOT_POWER_DEPENDENT_K2:
+            ax1.errorbar(x_no_aa_overlay, k2_no_aa_overlay,
+                         yerr=k2_no_aa_overlay_err, fmt='s',
+                         linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
+            m2_no_aa, b2_no_aa, cov2_no_aa = linear_fit(x_no_aa_overlay, k2_no_aa_overlay)
+            y_low2_no_aa, y_high2_no_aa = get_fit_bounds(x_extrap, m2_no_aa, b2_no_aa, cov2_no_aa)
+            ax1.plot(x_extrap, m2_no_aa * x_extrap + b2_no_aa, 'C3--', alpha=0.3, label=None)
+            ax1.fill_between(x_extrap, y_low2_no_aa, y_high2_no_aa, color='C3', alpha=0.1)
+        else:
+            k2_no_aa_val = k2_no_aa_overlay.iloc[0] if not k2_no_aa_overlay.empty else 0.0
+            ax1.axhline(k2_no_aa_val, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
 
     # Overlay Thylakoid Non-AA data on the AA plot
 
@@ -208,7 +296,7 @@ if not df_with_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4),
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
         Line2D([0], [0], marker=None, color='gray', label='Thylakoid (no AA)', linestyle='--', alpha=0.3)
@@ -279,26 +367,23 @@ if not df_no_aa.empty:
     ax1.plot(x_extrap, m1 * x_extrap + b1, 'C0-', label=None)
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
-    # Plot K2_light (no AA)
-    k2a_no_aa_series = get_numeric(df_no_aa['Kr1 (s⁻¹)'])
-    k2a_no_aa = k2a_no_aa_series.iloc[0] if not k2a_no_aa_series.empty else 0.0
-    # ax1.axhline(k2a_no_aa, color='C3', linestyle='--', label=r'$k_{2a}$')
-
-    k2b_no_aa_series = get_numeric(df_no_aa['Kr2 (s⁻¹)'])
-    k2b_no_aa = k2b_no_aa_series.iloc[0] if not k2b_no_aa_series.empty else 0.0
-    # ax1.axhline(k2b_no_aa, color='C4', linestyle='--', label=r'$k_{2b}$')
-    f_no_aa_series = get_numeric(df_no_aa['f'])
-    f_no_aa = f_no_aa_series.iloc[0] if not f_no_aa_series.empty else 0.0
-    k2_av = 1 / (f_no_aa / k2a_no_aa + (1-f_no_aa) / k2b_no_aa)
-    ax1.axhline(k2_av, color='C3', linestyle='--', label=r'$k_2$')
-
-    # k2l_no_aa = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-    # k2_plot = ax1.errorbar(x_no_aa, k2l_no_aa + k2_no_aa,
-    #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s', label=r'$k_{2}$',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
-    # # Linear fit for K2_light with zero intercept
-    # m2l = np.sum(x_no_aa[:] * k2l_no_aa[:]) / np.sum(x_no_aa[:]**2)
-    # ax1.plot(x_extrap, m2l * x_extrap + k2_no_aa, 'C3--', label=None)
+    # Plot K2 (no AA)
+    k2_no_aa, k2_no_aa_err = get_k2_average(df_no_aa)
+    if PLOT_POWER_DEPENDENT_K2:
+        k2_plot = ax1.errorbar(x_no_aa[:-1] if len(x_no_aa) > 2 else x_no_aa,
+                               k2_no_aa[:-1] if len(k2_no_aa) > 2 else k2_no_aa,
+                               yerr=k2_no_aa_err[:-1] if len(k2_no_aa_err) > 2 else k2_no_aa_err,
+                               fmt='s', label=r'$k_2$',
+                               linewidth=1, markersize=3, alpha=1, color='C3', capsize=3)
+        m2, b2, cov2 = linear_fit(x_no_aa[:-2] if len(x_no_aa) > 2 else x_no_aa,
+                                  k2_no_aa[:-2] if len(k2_no_aa) > 2 else k2_no_aa)
+        k2_extrap = m2 * 2 + b2
+        y_low2, y_high2 = get_fit_bounds(x_extrap, m2, b2, cov2)
+        # ax1.plot(x_extrap, m2 * x_extrap + b2, 'C3-', label=None)
+        # ax1.fill_between(x_extrap, y_low2, y_high2, color='C3', alpha=0.2)
+    else:
+        k2_val = k2_no_aa.iloc[0] if not k2_no_aa.empty else 0.0
+        ax1.axhline(k2_val, color='C3', linestyle='--', label=r'$k_2$')
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
     ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
@@ -333,9 +418,18 @@ if not df_no_aa.empty:
         ax1.plot(x_extrap, m1_thy * x_extrap + b1_thy, 'C0--', alpha=0.3, label=None)
 
         # K2 (Thylakoid no AA) overlay
-        k2_thy_series = get_numeric(df_thylakoid_no_aa['K2 (s⁻¹)'])
-        k2_thy = k2_thy_series.iloc[0] if not k2_thy_series.empty else 0.0
-        ax1.axhline(k2_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
+        k2_thy_series, k2_thy_err_series = get_k2_average(df_thylakoid_no_aa)
+        if PLOT_POWER_DEPENDENT_K2 and not k2_thy_series.empty:
+            ax1.errorbar(x_thy_no_aa, k2_thy_series,
+                         yerr=k2_thy_err_series, fmt='s',
+                         linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
+            m2_thy, b2_thy, cov2_thy = linear_fit(x_thy_no_aa[:-3] if len(x_thy_no_aa) > 3 else x_thy_no_aa,
+                                                  k2_thy_series[:-3] if len(k2_thy_series) > 3 else k2_thy_series)
+            y_low2_thy, y_high2_thy = get_fit_bounds(x_extrap, m2_thy, b2_thy, cov2_thy)
+            ax1.plot(x_extrap, m2_thy * x_extrap + b2_thy, 'C3--', alpha=0.3, label=None)
+        else:
+            k2_thy = k2_thy_series.iloc[0] if not k2_thy_series.empty else 0.0
+            ax1.axhline(k2_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
 
     ax1.set_xscale('log')
     ax1.set_yscale('log')
@@ -346,7 +440,7 @@ if not df_no_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4),
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
     ]

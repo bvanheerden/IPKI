@@ -85,7 +85,7 @@ if use_csv:
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        path = os.path.join(results_dir, 'data_no_aa_1q.pkl')
+        path = os.path.join(results_dir, 'data_no_aa_1q_k2l.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
             df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -94,7 +94,7 @@ else:
         print("data_no_aa.pkl not found in results/")
 
     try:
-        path = os.path.join(results_dir, 'data_with_aa_1q.pkl')
+        path = os.path.join(results_dir, 'data_with_aa_1q_k2l.pkl')
         with open(path, 'rb') as f:
             df_with_aa = pickle.load(f)
             df_with_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -174,7 +174,8 @@ if not df_with_aa.empty:
                  yerr=get_asymmetric_error(k1_aa, k1_err), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_aa[:5], k1_aa[:5])
+    # m1, b1, cov1 = linear_fit(x_aa[:5], k1_aa[:5])
+    m1, b1, cov1 = linear_fit(x_aa[1:-1], k1_aa[1:-1])  # k2 light
     k1_fit = m1 * x_extrap + b1
     # k1_extrap = m1 * 2 + b1
     k1_extrap = k1_aa[0]
@@ -186,12 +187,14 @@ if not df_with_aa.empty:
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
     k2_aa_series = get_numeric(df_with_aa['K2 (s⁻¹)'])
+    k2l_aa = get_numeric(df_with_aa['K2_light (s⁻¹)'])
     k2_aa = k2_aa_series.iloc[0] if not k2_aa_series.empty else 0.0
-    k2_plot = ax1.axhline(k2_aa, color='C3', linestyle='--', label=r'$k_2$')
-    # ax1.errorbar(x_aa, k2l_aa + k2_aa,
-    #              yerr=get_error(df_with_aa['K2_light (s⁻¹)']), fmt='s',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3, label=None)
-    # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
+    ax1.axhline(k2_aa + k2l_aa.mean(), color='C3', linestyle='--', label=r'$k_2$')
+    # k2_plot = ax1.axhline(k2_aa, color='C3', linestyle='--', label=r'$k_2$')
+    ax1.errorbar(x_aa, k2l_aa + k2_aa,
+                 yerr=get_error(df_with_aa['K2_light (s⁻¹)']), fmt='s',
+                 linewidth=1, markersize=4, alpha=1, color='C3', capsize=3, label=None)
+    m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
     # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
 
     plot_overlay = False
@@ -345,11 +348,12 @@ if not df_no_aa.empty:
     # Plot K2_light (no AA)
     k2_no_aa_series = get_numeric(df_no_aa['K2 (s⁻¹)'])
     k2_no_aa = k2_no_aa_series.iloc[0] if not k2_no_aa_series.empty else 0.0
-    ax1.axhline(k2_no_aa, color='C3', linestyle='--', label=r'$k_2$')
-    # k2l_no_aa = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-    # k2_plot = ax1.errorbar(x_no_aa, k2l_no_aa + k2_no_aa,
-    #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s', label=r'$k_{2}$',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
+    # ax1.axhline(k2_no_aa, color='C3', linestyle='--', label=r'$k_2$')
+    k2l_no_aa = get_numeric(df_no_aa['K2_light (s⁻¹)'])
+    ax1.axhline(k2_no_aa + k2l_no_aa.mean(), color='C3', linestyle='--', label=r'$k_2$')
+    k2_plot = ax1.errorbar(x_no_aa, k2l_no_aa + k2_no_aa,
+                 yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s', label=r'$k_{2}$',
+                 linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
     # # Linear fit for K2_light with zero intercept
     # m2l = np.sum(x_no_aa[:] * k2l_no_aa[:]) / np.sum(x_no_aa[:]**2)
     # ax1.plot(x_extrap, m2l * x_extrap + k2_no_aa, 'C3--', label=None)

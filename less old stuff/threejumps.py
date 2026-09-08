@@ -8,8 +8,9 @@ import os
 from scipy.integrate import solve_ivp
 from scipy.optimize import curve_fit
 
-data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/27 May 2026'
+# data_dir = '/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/27 May 2026'
 # data_dir = r'E:\SMS\Measurements\Bertus\LHCII\PAM\Modulate and gate\2026\27 May 2026'
+data_dir = r'C:\\Users\\bertu\\Desktop\\27 May 2026'
 
 timestep = 0.05  # time step of intensity trace in seconds
 p0 = [1 / 4, 1 / 6, 1 / 10, 1 / 3, 0.5]
@@ -39,7 +40,8 @@ p0 = [1 / 4, 1 / 6, 1 / 10, 1 / 3, 0.5]
 # onlen = 467
 
 # dataset = h5py.File(os.path.join(data_dir, 'Maart 2026', 'Power study new', '90 uW.h5'), 'r')
-dataset = h5py.File(os.path.join(data_dir, 'Chl a PAM.h5'), 'r')
+# dataset = h5py.File(os.path.join(data_dir, 'Chl a PAM.h5'), 'r')
+dataset = h5py.File(os.path.join(data_dir, 'test lhcii pam 22 may.h5'), 'r')
 startind = 3
 onlen = 690
 
@@ -154,23 +156,22 @@ def fittrace(dataset, partnums):
     return norm_pulsephotons, model, t_plot[:-1], tau1, tau2, tau3, tau4, q0
 
 
-# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
-#                                                                                    12, 13, 14, 15, 16, 17, 18, 19, 20])
+norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 # norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
                                                                           # 12, 13, 14, 15, 16, 17, 18, 19, 20])
-norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [11, 12, 13, 14, 15, 16])
+# norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [11, 12, 13, 14, 15, 16])
 # norm_pulsephotons_225, model_225, t_225, *params_225 = fittrace(dataset, [1, 4, 7, 8, 9, 10])
 if not onlyplot:
     plt.plot(t_225, norm_pulsephotons_225[:], '--', color='gray')
     plt.plot(t_225, model_225[:], '-')
 else:
-    plt.plot(norm_pulsephotons_225[:], '--', color='gray')
+    plt.plot(norm_pulsephotons_225[:], '-', color='black', lw=2)
 
 # plt.grid()
 plt.xlabel('Time (s)')
 plt.ylabel('Normalized photon count')
-plt.legend()
+# plt.legend()
 plt.tight_layout()
-# plt.xlim(0, 140)
+plt.xlim(0, 165)
 plt.show()
 

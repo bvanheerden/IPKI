@@ -196,6 +196,7 @@ try:
     ax.set_ylabel('Normalized fluorescence')
     ax.set_xlim(0, 90)
     plt.tight_layout()
+    plt.show()
 
     # Save plot
     # plot_file = os.path.join(base_dir, 'gco_control_fit.png')
@@ -303,7 +304,7 @@ try:
         ax2.set_xlim(0, 97)
         ax_thy_naa.set_xlabel('Time (s)')
         plt.tight_layout()
-
+        # plt.show()
 
 
 except Exception as e:

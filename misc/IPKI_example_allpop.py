@@ -11,9 +11,10 @@ import utils
 
 utils.setup_plotting()
 
-base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
-dataset_folder = '446 mE'
-dataset_name = '446 mE'
+# base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/29 May 2026/Power study LHCII'
+base_dir = r'C:\\Users\\bertu\\Desktop'
+dataset_folder = '301 mE'
+dataset_name = '301 mE'
 
 # Default parameters for each dataset (can be customized per dataset)
 default_partlist = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

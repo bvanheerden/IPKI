@@ -50,8 +50,9 @@ def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
             if lowlight:
                 k1, k2, k3, k4 = 0.096, 3.66, 0.0012, 0.083
             else:
-                k1, k2, k3, k4 = 1.64, 3.66, 0.05, 0.933  # Thylakoid
-                k1, k2, k3, k4 = 0.1, 0.18, 0.03, 0.82  # LHCII 301 mE
+                # k1, k2, k3, k4 = 1.64, 3.66, 0.05, 0.933  # Thylakoid
+                # k1, k2, k3, k4 = 0.1, 0.18, 0.03, 0.82  # LHCII 301 mE
+                k1, k2, k3, k4 = 0.1, 0, 0.03, 0.82  # LHCII 301 mE with no decay of quench
         else:
             k1, k2, k3, k4 = 0.232, 0.264, 0.17, 2.99
         res = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.28, t_dark, t_light, t_dark2, t_light2,
@@ -76,7 +77,7 @@ print("Fitting Thylakoid AA...")
 t_aa, pops_aa = fit_thylakoid(has_aa=True)
 
 for i in [3, 2, 1, 0]: # Order: U1, U2, Q, B
-    ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i], lw=3)
+    ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i], lw=2)#3)
     # ax_thy_aa.text(3.0, 0.76, 'Thylakoids + AA')
 
 for ax_curr in [ax2, ax_thy_aa]:
@@ -86,7 +87,8 @@ ax2.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.02, 1.05))
 ax_thy_aa.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.0, 1.0))
 
 ax2.set_xlim(0, 5)
-ax_thy_aa.set_xlim(0, 5)
+# ax_thy_aa.set_xlim(0, 5)
+ax_thy_aa.set_xlim(0, 10)
 ax_thy_aa.set_xlabel('Time (s)')
 ax2.set_xlabel('Time (s)')
 fig1.tight_layout()

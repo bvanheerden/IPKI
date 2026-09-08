@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 utils.setup_plotting()
 
-datadir = os.path.join(project_root, 'blinking/DHE/')
+datadir = os.path.join(project_root, 'blinking\\DHE\\')
 
 
 def loadspec(filename, existing_df, run):
@@ -56,28 +56,28 @@ lhcii_four = dhe_lhcii_df[dhe_lhcii_df['run'] == '4'].groupby('Wavelength (nm)')
 
 # Normalize by 620 nm value of initial spectrum
 norm_lhcii = lhcii_zero[idx_620]
-lhcii_zero /= norm_lhcii
-lhcii_four /= norm_lhcii
+lhcii_zero = lhcii_zero / norm_lhcii
+lhcii_four = lhcii_four / norm_lhcii
 lhcii_diff = lhcii_four - lhcii_zero
 
 # Process DHE
-dhe_zero = dhe_df[dhe_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
-dhe_four = dhe_df[dhe_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+dhe_zero = dhe_df[dhe_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values.copy()
+dhe_four = dhe_df[dhe_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values.copy()
 
 # Normalize by 620 nm value of initial spectrum
 norm_dhe = dhe_zero[idx_620]
-dhe_zero /= norm_dhe
-dhe_four /= norm_dhe
+dhe_zero = dhe_zero / norm_dhe
+dhe_four = dhe_four / norm_dhe
 dhe_diff = dhe_four - dhe_zero
 
 # Process DHE+SOD
-sod_zero = dhe_sod_df[dhe_sod_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
-sod_four = dhe_sod_df[dhe_sod_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values
+sod_zero = dhe_sod_df[dhe_sod_df['run'] == '0'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values.copy()
+sod_four = dhe_sod_df[dhe_sod_df['run'] == '4'].groupby('Wavelength (nm)')['Intensity (counts)'].mean().values.copy()
 
 # Normalize by 620 nm value of initial spectrum
 norm_sod = sod_zero[idx_620]
-sod_zero /= norm_sod
-sod_four /= norm_sod
+sod_zero = sod_zero / norm_sod
+sod_four = sod_four / norm_sod
 sod_diff = sod_four - sod_zero
 
 fig, axes = plt.subplots(2, 2, figsize=utils.get_figure_size(140, 110),

@@ -135,21 +135,25 @@ def modelfunc(t, k1, k2, k3, k4, q_sum, q_fraction, t_dark, t_light, t_dark2, t_
     return sol1, sol2, sol3, sol4, sol5, sol6
 
 def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light, t_dark2, t_light2, t_dark3,
-                 debug=False):
+                 kr1_light=None, kr2_light=None, debug=False, return_populations=False):
     """
     Model function for the 2-quenched-state kinetic model across multiple phases.
+    If kr1_light / kr2_light are provided, they are added to kr1 / kr2 during light phases.
     """
+    krl1 = kr1 + kr1_light if kr1_light is not None else kr1
+    krl2 = kr2 + kr2_light if kr2_light is not None else kr2
+
     q0 = 1 * q_fraction
     q1 = 1 * (1 - q_fraction)
     # y0: [Bleached, Q1, Q2, Unquenched2, Unquenched]
     y0 = np.array([0, 0, 0, q0, q1])
 
     K_light = np.array([
-        [0,    0,    0,    k4,    k3],
-        [0, -kr1,    0,     0,  f*k1],
-        [0,    0, -kr2,     0, (1-f)*k1],
-        [0,    0,    0,   -k4,     0],
-        [0,  kr1,  kr2,     0, -k1-k3]
+        [0,     0,     0,   k4,        k3],
+        [0, -krl1,     0,    0,      f*k1],
+        [0,     0, -krl2,    0,   (1-f)*k1],
+        [0,     0,     0,  -k4,         0],
+        [0,  krl1,  krl2,    0,    -k1-k3]
     ])
 
     K_dark = np.array([
@@ -175,6 +179,14 @@ def modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction, t_dark, t_light,
     sol5 = solve_expm(M_light, curr_y, max(0, t_dark3 - t_light2 + 1))
     curr_y = sol5.y[:, -1] if sol5.y.shape[1] > 0 else curr_y
     sol6 = solve_expm(M_dark, curr_y, max(0, len(t) - t_dark3))
+
+    if return_populations:
+        pops = []
+        for i in range(5):
+            pop_i = np.concatenate((sol1.y[i], sol2.y[i][1:], sol3.y[i][1:],
+                                    sol4.y[i][1:], sol5.y[i][1:], sol6.y[i][1:]))
+            pops.append(pop_i)
+        return np.array(pops)
 
     return sol1, sol2, sol3, sol4, sol5, sol6
 
