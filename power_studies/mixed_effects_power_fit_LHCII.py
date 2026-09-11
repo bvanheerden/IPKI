@@ -28,8 +28,10 @@ base_data_dir = r'C:\\Users\\bertu\\Desktop\\29 May 2026\\Power study LHCII'
 # Mixed-effects regularization strengths (1/sigma)
 # Higher weight = more "global" (less variation between powers)
 K2_PENALTY_WEIGHT = 10.0
-QF_PENALTY_WEIGHT = 1.0
-F_PENALTY_WEIGHT = 10.0
+KR1_PENALTY_WEIGHT = 5.0
+KR2_PENALTY_WEIGHT = 0.3
+QF_PENALTY_WEIGHT = 5.0
+F_PENALTY_WEIGHT = 2.0
 
 # Default parameters (used if no config file is found)
 default_params = {
@@ -45,7 +47,7 @@ fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for th
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 use_pickle = False  # Set to True to save/load processed traces
 USE_2Q_MODEL = True  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = True  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
+FIT_K2_LIGHT = False  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 
@@ -228,13 +230,13 @@ if all_datasets:
                     # Penalty terms: W * (parameter - mean)
                     if USE_2Q_MODEL:
                         if FIT_K2_LIGHT:
-                            penalties.append(K2_PENALTY_WEIGHT * (ds_params[1] - kr1_mean))
-                            penalties.append(K2_PENALTY_WEIGHT * (ds_params[3] - kr2_mean))
+                            penalties.append(KR1_PENALTY_WEIGHT * (ds_params[1] - kr1_mean))
+                            penalties.append(KR2_PENALTY_WEIGHT * (ds_params[3] - kr2_mean))
                             penalties.append(F_PENALTY_WEIGHT * (ds_params[7] - f_mean))
                             penalties.append(QF_PENALTY_WEIGHT * (ds_params[9] - qf_mean))
                         else:
-                            penalties.append(K2_PENALTY_WEIGHT * (ds_params[1] - kr1_mean))
-                            penalties.append(K2_PENALTY_WEIGHT * (ds_params[2] - kr2_mean))
+                            penalties.append(KR1_PENALTY_WEIGHT * (ds_params[1] - kr1_mean))
+                            penalties.append(KR2_PENALTY_WEIGHT * (ds_params[2] - kr2_mean))
                             penalties.append(F_PENALTY_WEIGHT * (ds_params[5] - f_mean))
                             penalties.append(QF_PENALTY_WEIGHT * (ds_params[7] - qf_mean))
                     else:
@@ -253,12 +255,12 @@ if all_datasets:
         if USE_2Q_MODEL:
             p0_global = [0.3, 1.5, 0.5, 0.18] # Global means: kr1_mean, kr2_mean, f_mean, qf_mean
             lower_bounds = [0, 1, 0, 0.0]
-            upper_bounds = [1, 20, 1.0, 0.5]
+            upper_bounds = [0.2, 6, 1.0, 0.5]
         else:
             p0_global = [2.6 if group_name == 'AA' else 0.3, 0.18] # Global means: k2_mean, qf_mean
             lower_bounds = [0, 0.0]
             upper_bounds = [10, 0.5]
-        
+
         for ds in datasets:
             dp0 = ds['params']['p0']
             if USE_2Q_MODEL:

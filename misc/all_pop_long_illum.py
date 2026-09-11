@@ -51,8 +51,8 @@ def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
                 k1, k2, k3, k4 = 0.096, 3.66, 0.0012, 0.083
             else:
                 # k1, k2, k3, k4 = 1.64, 3.66, 0.05, 0.933  # Thylakoid
-                # k1, k2, k3, k4 = 0.1, 0.18, 0.03, 0.82  # LHCII 301 mE
-                k1, k2, k3, k4 = 0.1, 0, 0.03, 0.82  # LHCII 301 mE with no decay of quench
+                k1, k2, k3, k4 = 0.1, 0.18, 0.03, 0.82  # LHCII 301 mE
+                # k1, k2, k3, k4 = 0.1, 0, 0.03, 0.82  # LHCII 301 mE with no decay of quench
         else:
             k1, k2, k3, k4 = 0.232, 0.264, 0.17, 2.99
         res = kinetic_model.modelfunc(t, k1, k2, k3, k4, 1, 0.28, t_dark, t_light, t_dark2, t_light2,
@@ -63,7 +63,7 @@ def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
     pops = thy_fitfunc(t)
     return t, pops
 
-thy_pop_labels = ['B', 'Q', 'U2', 'U1']
+thy_pop_labels = ['B', 'Q', 'U$_2$', 'U$_1$']
 colors = ['C1', 'C3', 'C2', 'C0']
 t_lhcii, pops_lhcii = fit_thylakoid(lhcii=True)
 pops_lhcii[2] += pops_lhcii[1]
@@ -88,7 +88,7 @@ ax_thy_aa.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.0, 1.0))
 
 ax2.set_xlim(0, 5)
 # ax_thy_aa.set_xlim(0, 5)
-ax_thy_aa.set_xlim(0, 10)
+ax_thy_aa.set_xlim(0, 5)
 ax_thy_aa.set_xlabel('Time (s)')
 ax2.set_xlabel('Time (s)')
 fig1.tight_layout()

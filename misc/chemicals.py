@@ -88,7 +88,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
 
 
     def fitfunc(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, f, 1, q_fraction, t_dark,
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, 0.3, 1, 0.23, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3)
         return np.concatenate((sol1.y[3]+sol1.y[4], sol2.y[3][1:]+sol2.y[4][1:], sol3.y[3][1:]+sol3.y[4][1:],
                                sol4.y[3][1:]+sol4.y[4][1:], sol5.y[3][1:]+sol5.y[4][1:], sol6.y[3][1:]+sol6.y[4][1:]))
@@ -120,11 +120,11 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
         q_sum_err = np.nan
         q_fraction_err = np.nan
 
-    print(f'Tau1 = {tau[0]:.2g} ± {tau_err[0]:.2g} s')
-    print(f'Tau_r1 = {tau[1]:.2g} ± {tau_err[1]:.2g} s')
-    print(f'Tau_r2 = {tau[2]:.2g} ± {tau_err[2]:.2g} s')
-    print(f'Tau3 = {tau[3]:.2g} ± {tau_err[3]:.2g} s')
-    print(f'Tau4 = {tau[4]:.2g} ± {tau_err[4]:.2g} s')
+    print(f'k1 = {popt[0]:.2g} ± {perr[0]:.2g} s⁻¹')
+    print(f'kr1 = {popt[1]:.2g} ± {perr[1]:.2g} s⁻¹')
+    print(f'kr2 = {popt[2]:.2g} ± {perr[2]:.2g} s⁻¹')
+    print(f'k3 = {popt[3]:.2g} ± {perr[3]:.2g} s⁻¹')
+    print(f'k4 = {popt[4]:.2g} ± {perr[4]:.2g} s⁻¹')
     print(f'f = {popt[5]:.2g} ± {perr[5]:.2g}')
     print(f'Q_sum = {q_sum:.2g} ± {q_sum_err:.2g} cps')
     print(f'Q_fraction = {q_fraction:.2g} ± {q_fraction_err:.2g}')
@@ -236,11 +236,11 @@ for display_name, folder_name in datasets.items():
 
         results.append({
             'Dataset': display_name,
-            'Tau1 (s)': fmt_val_err(tau_list[0], tau_err_list[0]),
-            'Tau_r1 (s)': fmt_val_err(tau_list[1], tau_err_list[1]),
-            'Tau_r2 (s)': fmt_val_err(tau_list[2], tau_err_list[2]),
-            'Tau3 (s)': fmt_val_err(tau_list[3], tau_err_list[3]),
-            'Tau4 (s)': fmt_val_err(tau_list[4], tau_err_list[4]),
+            'k1 (s⁻¹)': fmt_val_err(popt[0], perr[0]),
+            'kr1 (s⁻¹)': fmt_val_err(popt[1], perr[1]),
+            'kr2 (s⁻¹)': fmt_val_err(popt[2], perr[2]),
+            'k3 (s⁻¹)': fmt_val_err(popt[3], perr[3]),
+            'k4 (s⁻¹)': fmt_val_err(popt[4], perr[4]),
             'f': fmt_val_err(popt[5], perr[5]),
             'Q_sum': fmt_val_err(q_sum, q_sum_err),
             'Q_fraction': fmt_val_err(q_fraction, q_fraction_err)

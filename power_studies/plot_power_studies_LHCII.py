@@ -14,7 +14,7 @@ import matplotlib.ticker as mticker
 import seaborn as sns
 
 FIT_WITH_INTERCEPT = True
-PLOT_POWER_DEPENDENT_K2 = True  # Set to True to plot power-dependent average k2 with fits, False for horizontal line
+PLOT_POWER_DEPENDENT_K2 = False  # Set to True to plot power-dependent average k2 with fits, False for horizontal line
 
 import utils
 
@@ -143,7 +143,7 @@ df_with_aa = pd.DataFrame()
 df_thylakoid_no_aa = pd.DataFrame()
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q_klight.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q.pkl')
     with open(path, 'rb') as f:
         df_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -170,157 +170,179 @@ except FileNotFoundError:
 base_data_dir = '.' 
 
 # Create figure for "with AA" data: single axis for k1, k3, k4
-if not df_with_aa.empty:
-    print('hello')
-    fig_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 70 / 25.4))
-
-    x_aa = df_with_aa['Power (mE)'].values
-    x_extrap = np.linspace(min(2, x_aa.min()), max(2, x_aa.max()), 100)
-
-    # Plot K3 (with AA)
-    k3_aa = get_numeric(df_with_aa['K3 (s⁻¹)'])
-    k3_plot = ax1.errorbar(x_aa, k3_aa,
-                yerr=get_error(df_with_aa['K3 (s⁻¹)']), fmt='^', label=r'$k_3$',
-                linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
-    # Linear fit for K3
-    m3, b3, cov3 = linear_fit(x_aa, k3_aa)
-    print('m3', m3, 'b3', b3)
-    k3_extrap = m3 * 2 + b3
-    y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
-    ax1.plot(x_extrap, m3 * x_extrap + b3, 'C1--', label=None)
-    ax1.fill_between(x_extrap, y_low3, y_high3, color='C1', alpha=0.2)
-    # Linear fit with intercept
-    # model = np.polynomial.Polynomial.fit(x_aa[:-1], k3_aa[:-1], deg=1)
-    # ax1.plot(x_extrap, model(x_extrap), 'C1--', label=None)
-
-    # Plot K4 (with AA)
-    k4_aa = get_numeric(df_with_aa['K4 (s⁻¹)'])
-    k4_plot = ax1.errorbar(x_aa,  k4_aa,
-                yerr=get_error(df_with_aa['K4 (s⁻¹)']), fmt='v', label=r'$k_4$',
-                linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
-    # Linear fit for K4
-    m4, b4, cov4 = linear_fit(x_aa, k4_aa)
-    print('m4', m4, 'b4', b4)
-    k4_extrap = m4 * 2 + b4
-    y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
-    ax1.plot(x_extrap, m4 * x_extrap + b4, 'C2--', label=None)
-    ax1.fill_between(x_extrap, y_low4, y_high4, color='C2', alpha=0.2)
-
-    # Plot K1 (with AA)
-    k1_aa = get_numeric(df_with_aa['K1 (s⁻¹)'])
-    k1_plot = ax1.errorbar(x_aa, k1_aa,
-                 yerr=get_error(df_with_aa['K1 (s⁻¹)']), fmt='o', label=r'$k_1$',
-                 linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
-    # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_aa, k1_aa)
-    print('m1', m1, 'b1', b1)
-    k1_extrap = m1 * 2 + b1
-    y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
-    ax1.plot(x_extrap, m1 * x_extrap + b1, 'C0--', label=None)
-    ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
-
-    k2_aa, k2_aa_err = get_k2_average(df_with_aa)
-    if PLOT_POWER_DEPENDENT_K2:
-        k2_plot = ax1.errorbar(x_aa, k2_aa,
-                               yerr=k2_aa_err, fmt='s', label=r'$k_2$',
-                               linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
-        m2_aa, b2_aa, cov2_aa = linear_fit(x_aa, k2_aa)
-        k2_extrap = m2_aa * 2 + b2_aa
-        y_low2, y_high2 = get_fit_bounds(x_extrap, m2_aa, b2_aa, cov2_aa)
-        ax1.plot(x_extrap, m2_aa * x_extrap + b2_aa, 'C3--', label=None)
-        ax1.fill_between(x_extrap, y_low2, y_high2, color='C3', alpha=0.2)
-    else:
-        k2_aa_val = k2_aa.iloc[0] if not k2_aa.empty else 0.0
-        k2_plot = ax1.axhline(k2_aa_val, color='C3', linestyle='--', label=r'$k_2$')
-
-    plot_overlay = False
-    # Overlay Non-AA data on the AA plot
-    if not df_no_aa.empty and plot_overlay:
-        x_no_aa_overlay = df_no_aa['Power (mE)'].values
-
-        # K3 (no AA) overlay
-        k3_no_aa_overlay = get_numeric(df_no_aa['K3 (s⁻¹)'])
-        ax1.errorbar(x_no_aa_overlay, k3_no_aa_overlay,
-                    yerr=get_error(df_no_aa['K3 (s⁻¹)']), fmt='^',
-                    linewidth=1, markersize=4, alpha=0.3, color='C1', capsize=3, label=None)
-        m3_no_aa, b3_no_aa, cov3_no_aa = linear_fit(x_no_aa_overlay, k3_no_aa_overlay)
-        y_low3_no_aa, y_high3_no_aa = get_fit_bounds(x_extrap, m3_no_aa, b3_no_aa, cov3_no_aa)
-        ax1.plot(x_extrap, m3_no_aa * x_extrap + b3_no_aa, 'C1--', alpha=0.3, label=None)
-        ax1.fill_between(x_extrap, y_low3_no_aa, y_high3_no_aa, color='C1', alpha=0.1)
-
-        # K4 (no AA) overlay
-        k4_no_aa_overlay = get_numeric(df_no_aa['K4 (s⁻¹)'])
-        ax1.errorbar(x_no_aa_overlay, k4_no_aa_overlay,
-                    yerr=get_error(df_no_aa['K4 (s⁻¹)']), fmt='v',
-                    linewidth=1, markersize=4, alpha=0.3, color='C2', capsize=3, label=None)
-        m4_no_aa, b4_no_aa, cov4_no_aa = linear_fit(x_no_aa_overlay, k4_no_aa_overlay)
-        y_low4_no_aa, y_high4_no_aa = get_fit_bounds(x_extrap, m4_no_aa, b4_no_aa, cov4_no_aa)
-        ax1.plot(x_extrap, m4_no_aa * x_extrap + b4_no_aa, 'C2--', alpha=0.3, label=None)
-        ax1.fill_between(x_extrap, y_low4_no_aa, y_high4_no_aa, color='C2', alpha=0.1)
-
-        # K1 (no AA) overlay
-        k1_no_aa_overlay = get_numeric(df_no_aa['K1 (s⁻¹)'])
-        ax1.errorbar(x_no_aa_overlay, k1_no_aa_overlay,
-                     yerr=get_error(df_no_aa['K1 (s⁻¹)']), fmt='o',
-                     linewidth=1, markersize=4, alpha=0.3, color='C0', capsize=3, label=None)
-        m1_no_aa, b1_no_aa, cov1_no_aa = linear_fit(x_no_aa_overlay[:], k1_no_aa_overlay[:])
-        y_low1_no_aa, y_high1_no_aa = get_fit_bounds(x_extrap, m1_no_aa, b1_no_aa, cov1_no_aa)
-        ax1.plot(x_extrap, m1_no_aa * x_extrap + b1_no_aa, 'C0--', alpha=0.3, label=None)
-        ax1.fill_between(x_extrap, y_low1_no_aa, y_high1_no_aa, color='C0', alpha=0.1)
-
-        # K2_light (no AA) overlay
-        k2_no_aa_overlay, k2_no_aa_overlay_err = get_k2_average(df_no_aa)
-        if PLOT_POWER_DEPENDENT_K2:
-            ax1.errorbar(x_no_aa_overlay, k2_no_aa_overlay,
-                         yerr=k2_no_aa_overlay_err, fmt='s',
-                         linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
-            m2_no_aa, b2_no_aa, cov2_no_aa = linear_fit(x_no_aa_overlay, k2_no_aa_overlay)
-            y_low2_no_aa, y_high2_no_aa = get_fit_bounds(x_extrap, m2_no_aa, b2_no_aa, cov2_no_aa)
-            ax1.plot(x_extrap, m2_no_aa * x_extrap + b2_no_aa, 'C3--', alpha=0.3, label=None)
-            ax1.fill_between(x_extrap, y_low2_no_aa, y_high2_no_aa, color='C3', alpha=0.1)
-        else:
-            k2_no_aa_val = k2_no_aa_overlay.iloc[0] if not k2_no_aa_overlay.empty else 0.0
-            ax1.axhline(k2_no_aa_val, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
-
-    # Overlay Thylakoid Non-AA data on the AA plot
-
-    ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
-
-    # ax1.set_xscale('log')
-    # ax1.set_yscale('log')
-    ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
-    ax1.set_xlim(1.5, None)
-    
-    # Custom legend without error bars
-    from matplotlib.lines import Line2D
-    legend_elements = [
-        Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4),
-        Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='gray', label='Thylakoid (no AA)', linestyle='--', alpha=0.3)
-    ]
-
-    # linear scale
-    # ax1.text(2, 0.55, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k')
-    # ax1.text(2, 0.4, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0')
-    # ax1.text(2, 0.25, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1')
-    # ax1.text(2, 0.1, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2')
-    # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
-    # log scale
-    ax1.text(2, 0.015, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', rotation=26)
-    ax1.text(2, k1_extrap*1.3, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', rotation=26)
-    ax1.text(2, k3_extrap*1.5, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', rotation=26)
-    ax1.text(2, k4_extrap*1.0, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', rotation=26)
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False)
-
-    sns.despine()
-    plt.tight_layout()
-    plot_file_aa = os.path.join(base_data_dir, 'k_values_vs_power_with_AA.png')
-    plt.savefig(plot_file_aa, dpi=300, bbox_inches='tight')
-    print(f"With AA plot saved to: {plot_file_aa}")
-    plt.show()
+# if not df_with_aa.empty:
+#     print('hello')
+#     fig_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 70 / 25.4))
+#
+#     x_aa = df_with_aa['Power (mE)'].values
+#     x_extrap = np.linspace(min(2, x_aa.min()), max(2, x_aa.max()), 100)
+#
+#     # Plot K3 (with AA)
+#     k3_aa = get_numeric(df_with_aa['K3 (s⁻¹)'])
+#     k3_plot = ax1.errorbar(x_aa, k3_aa,
+#                 yerr=get_error(df_with_aa['K3 (s⁻¹)']), fmt='^', label=r'$k_3$',
+#                 linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
+#     # Linear fit for K3
+#     m3, b3, cov3 = linear_fit(x_aa, k3_aa)
+#     print('m3', m3, 'b3', b3)
+#     k3_extrap = m3 * 2 + b3
+#     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
+#     ax1.plot(x_extrap, m3 * x_extrap + b3, 'C1--', label=None)
+#     ax1.fill_between(x_extrap, y_low3, y_high3, color='C1', alpha=0.2)
+#     # Linear fit with intercept
+#     # model = np.polynomial.Polynomial.fit(x_aa[:-1], k3_aa[:-1], deg=1)
+#     # ax1.plot(x_extrap, model(x_extrap), 'C1--', label=None)
+#
+#     # Plot K4 (with AA)
+#     k4_aa = get_numeric(df_with_aa['K4 (s⁻¹)'])
+#     k4_plot = ax1.errorbar(x_aa,  k4_aa,
+#                 yerr=get_error(df_with_aa['K4 (s⁻¹)']), fmt='v', label=r'$k_4$',
+#                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
+#     # Linear fit for K4
+#     m4, b4, cov4 = linear_fit(x_aa, k4_aa)
+#     print('m4', m4, 'b4', b4)
+#     k4_extrap = m4 * 2 + b4
+#     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
+#     ax1.plot(x_extrap, m4 * x_extrap + b4, 'C2--', label=None)
+#     ax1.fill_between(x_extrap, y_low4, y_high4, color='C2', alpha=0.2)
+#
+#     # Plot K1 (with AA)
+#     k1_aa = get_numeric(df_with_aa['K1 (s⁻¹)'])
+#     k1_plot = ax1.errorbar(x_aa, k1_aa,
+#                  yerr=get_error(df_with_aa['K1 (s⁻¹)']), fmt='o', label=r'$k_1$',
+#                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
+#     # Linear fit for K1
+#     m1, b1, cov1 = linear_fit(x_aa, k1_aa)
+#     print('m1', m1, 'b1', b1)
+#     k1_extrap = m1 * 2 + b1
+#     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
+#     ax1.plot(x_extrap, m1 * x_extrap + b1, 'C0--', label=None)
+#     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
+#
+#     k2_aa, k2_aa_err = get_k2_average(df_with_aa)
+#     if PLOT_POWER_DEPENDENT_K2:
+#         k2_plot = ax1.errorbar(x_aa, k2_aa,
+#                                yerr=k2_aa_err, fmt='s', label=r'$k_2$',
+#                                linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
+#         m2_aa, b2_aa, cov2_aa = linear_fit(x_aa, k2_aa)
+#         k2_extrap = m2_aa * 2 + b2_aa
+#         y_low2, y_high2 = get_fit_bounds(x_extrap, m2_aa, b2_aa, cov2_aa)
+#         ax1.plot(x_extrap, m2_aa * x_extrap + b2_aa, 'C3--', label=None)
+#         ax1.fill_between(x_extrap, y_low2, y_high2, color='C3', alpha=0.2)
+#     else:
+#         if 'Kr1 (s⁻¹)' in df_with_aa.columns and 'Kr2 (s⁻¹)' in df_with_aa.columns:
+#             kr1_aa_val = get_numeric(df_with_aa['Kr1 (s⁻¹)']).mean()
+#             kr2_aa_val = get_numeric(df_with_aa['Kr2 (s⁻¹)']).mean()
+#             k2_plot = ax1.axhline(kr1_aa_val, color='C3', linestyle='--', label=r'$k_2$')
+#             ax1.axhline(kr2_aa_val, color='C3', linestyle='--')
+#         else:
+#             k2_aa_val = k2_aa.iloc[0] if not k2_aa.empty else 0.0
+#             k2_plot = ax1.axhline(k2_aa_val, color='C3', linestyle='--', label=r'$k_2$')
+#
+#     plot_overlay = False
+#     # Overlay Non-AA data on the AA plot
+#     if not df_no_aa.empty and plot_overlay:
+#         x_no_aa_overlay = df_no_aa['Power (mE)'].values
+#
+#         # K3 (no AA) overlay
+#         k3_no_aa_overlay = get_numeric(df_no_aa['K3 (s⁻¹)'])
+#         ax1.errorbar(x_no_aa_overlay, k3_no_aa_overlay,
+#                     yerr=get_error(df_no_aa['K3 (s⁻¹)']), fmt='^',
+#                     linewidth=1, markersize=4, alpha=0.3, color='C1', capsize=3, label=None)
+#         m3_no_aa, b3_no_aa, cov3_no_aa = linear_fit(x_no_aa_overlay, k3_no_aa_overlay)
+#         y_low3_no_aa, y_high3_no_aa = get_fit_bounds(x_extrap, m3_no_aa, b3_no_aa, cov3_no_aa)
+#         ax1.plot(x_extrap, m3_no_aa * x_extrap + b3_no_aa, 'C1--', alpha=0.3, label=None)
+#         ax1.fill_between(x_extrap, y_low3_no_aa, y_high3_no_aa, color='C1', alpha=0.1)
+#
+#         # K4 (no AA) overlay
+#         k4_no_aa_overlay = get_numeric(df_no_aa['K4 (s⁻¹)'])
+#         ax1.errorbar(x_no_aa_overlay, k4_no_aa_overlay,
+#                     yerr=get_error(df_no_aa['K4 (s⁻¹)']), fmt='v',
+#                     linewidth=1, markersize=4, alpha=0.3, color='C2', capsize=3, label=None)
+#         m4_no_aa, b4_no_aa, cov4_no_aa = linear_fit(x_no_aa_overlay, k4_no_aa_overlay)
+#         y_low4_no_aa, y_high4_no_aa = get_fit_bounds(x_extrap, m4_no_aa, b4_no_aa, cov4_no_aa)
+#         ax1.plot(x_extrap, m4_no_aa * x_extrap + b4_no_aa, 'C2--', alpha=0.3, label=None)
+#         ax1.fill_between(x_extrap, y_low4_no_aa, y_high4_no_aa, color='C2', alpha=0.1)
+#
+#         # K1 (no AA) overlay
+#         k1_no_aa_overlay = get_numeric(df_no_aa['K1 (s⁻¹)'])
+#         ax1.errorbar(x_no_aa_overlay, k1_no_aa_overlay,
+#                      yerr=get_error(df_no_aa['K1 (s⁻¹)']), fmt='o',
+#                      linewidth=1, markersize=4, alpha=0.3, color='C0', capsize=3, label=None)
+#         m1_no_aa, b1_no_aa, cov1_no_aa = linear_fit(x_no_aa_overlay[:], k1_no_aa_overlay[:])
+#         y_low1_no_aa, y_high1_no_aa = get_fit_bounds(x_extrap, m1_no_aa, b1_no_aa, cov1_no_aa)
+#         ax1.plot(x_extrap, m1_no_aa * x_extrap + b1_no_aa, 'C0--', alpha=0.3, label=None)
+#         ax1.fill_between(x_extrap, y_low1_no_aa, y_high1_no_aa, color='C0', alpha=0.1)
+#
+#         # K2_light (no AA) overlay
+#         k2_no_aa_overlay, k2_no_aa_overlay_err = get_k2_average(df_no_aa)
+#         if PLOT_POWER_DEPENDENT_K2:
+#             ax1.errorbar(x_no_aa_overlay, k2_no_aa_overlay,
+#                          yerr=k2_no_aa_overlay_err, fmt='s',
+#                          linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
+#             m2_no_aa, b2_no_aa, cov2_no_aa = linear_fit(x_no_aa_overlay, k2_no_aa_overlay)
+#             y_low2_no_aa, y_high2_no_aa = get_fit_bounds(x_extrap, m2_no_aa, b2_no_aa, cov2_no_aa)
+#             ax1.plot(x_extrap, m2_no_aa * x_extrap + b2_no_aa, 'C3--', alpha=0.3, label=None)
+#             ax1.fill_between(x_extrap, y_low2_no_aa, y_high2_no_aa, color='C3', alpha=0.1)
+#         else:
+#             if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
+#                 kr1_no_aa_val = get_numeric(df_no_aa['Kr1 (s⁻¹)']).mean()
+#                 kr2_no_aa_val = get_numeric(df_no_aa['Kr2 (s⁻¹)']).mean()
+#                 ax1.axhline(kr1_no_aa_val, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
+#                 ax1.axhline(kr2_no_aa_val, color='C3', linestyle='--', alpha=0.3)
+#             else:
+#                 k2_no_aa_val = k2_no_aa_overlay.iloc[0] if not k2_no_aa_overlay.empty else 0.0
+#                 ax1.axhline(k2_no_aa_val, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
+#
+#     # Overlay Thylakoid Non-AA data on the AA plot
+#
+#     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
+#     ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
+#
+#     # ax1.set_xscale('log')
+#     # ax1.set_yscale('log')
+#     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
+#     ax1.set_xlim(1.5, None)
+#
+#     # Custom legend without error bars
+#     from matplotlib.lines import Line2D
+#     legend_elements = [
+#         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
+#     ]
+#     if not PLOT_POWER_DEPENDENT_K2 and 'Kr1 (s⁻¹)' in df_with_aa.columns and 'Kr2 (s⁻¹)' in df_with_aa.columns:
+#         legend_elements.extend([
+#             Line2D([0], [0], marker=None, color='C3', label=r'$k_{2a}$', linestyle='--', markersize=4),
+#             Line2D([0], [0], marker=None, color='C4', label=r'$k_{2b}$', linestyle='--', markersize=4),
+#         ])
+#     else:
+#         legend_elements.append(
+#             Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4)
+#         )
+#     legend_elements.extend([
+#         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
+#         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
+#         Line2D([0], [0], marker=None, color='gray', label='Thylakoid (no AA)', linestyle='--', alpha=0.3)
+#     ])
+#
+#     # linear scale
+#     # ax1.text(2, 0.55, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k')
+#     # ax1.text(2, 0.4, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0')
+#     # ax1.text(2, 0.25, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1')
+#     # ax1.text(2, 0.1, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2')
+#     # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
+#     # log scale
+#     ax1.text(2, 0.015, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', rotation=26)
+#     ax1.text(2, k1_extrap*1.3, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', rotation=26)
+#     ax1.text(2, k3_extrap*1.5, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', rotation=26)
+#     ax1.text(2, k4_extrap*1.0, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', rotation=26)
+#     ax1.legend(handles=legend_elements, loc='lower right', frameon=False)
+#
+#     sns.despine()
+#     plt.tight_layout()
+#     plot_file_aa = os.path.join(base_data_dir, 'k_values_vs_power_with_AA.png')
+#     plt.savefig(plot_file_aa, dpi=300, bbox_inches='tight')
+#     print(f"With AA plot saved to: {plot_file_aa}")
+#     plt.show()
 
 # Create unified figure for "without AA" data
 if not df_no_aa.empty:
@@ -382,11 +404,19 @@ if not df_no_aa.empty:
         # ax1.plot(x_extrap, m2 * x_extrap + b2, 'C3-', label=None)
         # ax1.fill_between(x_extrap, y_low2, y_high2, color='C3', alpha=0.2)
     else:
-        k2_val = k2_no_aa.iloc[0] if not k2_no_aa.empty else 0.0
-        ax1.axhline(k2_val, color='C3', linestyle='--', label=r'$k_2$')
+        if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
+            kr1_val = get_numeric(df_no_aa['Kr1 (s⁻¹)']).mean()
+            kr2_val = get_numeric(df_no_aa['Kr2 (s⁻¹)']).mean()
+            ax1.axhline(kr1_val, color='C3', linestyle='--', label=r'$k_{2a}$')
+            ax1.axhline(kr2_val, color='C4', linestyle='--', label=r'$k_{2b}$')
+            ax1.scatter(x_no_aa[:-1], [kr1_val for x in x_no_aa[:-1]], color='C3', marker='s', label=None, s=5)
+            ax1.scatter(x_no_aa[:-1], [kr2_val for x in x_no_aa[:-1]], color='C4', marker='s', label=None, s=5)
+        else:
+            k2_val = k2_no_aa.iloc[0] if not k2_no_aa.empty else 0.0
+            ax1.axhline(k2_val, color='C3', linestyle='--', label=r'$k_2$')
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
-    ax1.set_xlabel(r'Photon flux density (mmol photons m$^{-2}$ s$^{-1}$)')
+    ax1.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
 
 
     if False:
@@ -428,8 +458,14 @@ if not df_no_aa.empty:
             y_low2_thy, y_high2_thy = get_fit_bounds(x_extrap, m2_thy, b2_thy, cov2_thy)
             ax1.plot(x_extrap, m2_thy * x_extrap + b2_thy, 'C3--', alpha=0.3, label=None)
         else:
-            k2_thy = k2_thy_series.iloc[0] if not k2_thy_series.empty else 0.0
-            ax1.axhline(k2_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
+            if 'Kr1 (s⁻¹)' in df_thylakoid_no_aa.columns and 'Kr2 (s⁻¹)' in df_thylakoid_no_aa.columns:
+                kr1_thy = get_numeric(df_thylakoid_no_aa['Kr1 (s⁻¹)']).mean()
+                kr2_thy = get_numeric(df_thylakoid_no_aa['Kr2 (s⁻¹)']).mean()
+                ax1.axhline(kr1_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
+                ax1.axhline(kr2_thy, color='C3', linestyle='--', alpha=0.3)
+            else:
+                k2_thy = k2_thy_series.iloc[0] if not k2_thy_series.empty else 0.0
+                ax1.axhline(k2_thy, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
 
     ax1.set_xscale('log')
     ax1.set_yscale('log')
@@ -440,10 +476,20 @@ if not df_no_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4),
+    ]
+    if not PLOT_POWER_DEPENDENT_K2 and 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
+        legend_elements.extend([
+            Line2D([0], [0], marker='s', color='C3', label=r'$k_{2a}$', linestyle='--', markersize=4),
+            Line2D([0], [0], marker='s', color='C4', label=r'$k_{2b}$', linestyle='--', markersize=4),
+        ])
+    else:
+        legend_elements.append(
+            Line2D([0], [0], marker='s' if PLOT_POWER_DEPENDENT_K2 else None, color='C3', label=r'$k_2$', linestyle='None' if PLOT_POWER_DEPENDENT_K2 else '--', markersize=4)
+        )
+    legend_elements.extend([
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
-    ]
+    ])
     ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=1)#, bbox_to_anchor=(0, 0.95))
 
     # sns.despine()

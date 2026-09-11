@@ -128,9 +128,9 @@ def plot_switching_rates(summary, dataset_name, output_plot):
             'Compressed air': 'Air',
             'GOC+N2 purging': 'GOC+N$_2$',
             'N2 purging': 'N$_2$',
-            '1.2%': '1.2% O$_2$',
-            '4.2%': '4.2% O$_2$',
-            '10.2%': '10.2% O$_2$'
+            '1.2%': '16 μM O$_2$',
+            '4.2%': '55 μM O$_2$',
+            '10.2%': '130 μM O$_2$'
         }
         for old, new in renames.items():
             if old in summary:
@@ -160,9 +160,9 @@ def plot_switching_rates(summary, dataset_name, output_plot):
     std_errs = [summary[c]['std_err'] for c in conditions_sorted]
 
     if dataset_name == "SMS_blinking":
-        plt.figure(figsize=(120/25.4, 40/25.4))
+        plt.figure(figsize=(120/25.4, 35/25.4))
     else:
-        plt.figure(figsize=(50/25.4, 40/25.4))
+        plt.figure(figsize=(50/25.4, 35/25.4))
     
     # Color logic
     if dataset_name == "SMS_blinking":
@@ -180,15 +180,15 @@ def plot_switching_rates(summary, dataset_name, output_plot):
     bars = plt.bar(conditions_sorted, avg_rates, yerr=std_errs, capsize=3, color=colors, edgecolor='black', lw=0.7,
                    error_kw=dict(elinewidth=1))
     
-    plt.xlabel('Condition')
+    # plt.xlabel('Condition')
     plt.ylabel('Switching frequency (s$^{-1}$)')
     plt.xticks(fontsize=5)
     
     # Add values on top of bars
-    for bar, c in zip(bars, conditions_sorted):
-        height = bar.get_height()
-        plt.text(bar.get_x() + bar.get_width()/2., height + summary[c]['std_err'] + 0.03,
-                 f'{summary[c]["avg_rate"]:.2g}', ha='center', va='bottom', fontsize=5, color='black')
+    # for bar, c in zip(bars, conditions_sorted):
+    #     height = bar.get_height()
+    #     plt.text(bar.get_x() + bar.get_width()/2., height + summary[c]['std_err'] + 0.03,
+    #              f'{summary[c]["avg_rate"]:.2g}', ha='center', va='bottom', fontsize=5, color='black')
 
     # if legend_elements:
     #     plt.legend(handles=legend_elements, frameon=False)

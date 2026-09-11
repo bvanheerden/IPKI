@@ -194,7 +194,7 @@ if not df_with_aa.empty:
     # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
     # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
 
-    plot_overlay = False
+    plot_overlay = True
     # Overlay Non-AA data on the AA plot
     print(df_no_aa)
     if not df_no_aa.empty and plot_overlay:

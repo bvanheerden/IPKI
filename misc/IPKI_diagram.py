@@ -50,12 +50,12 @@ phases = [
     ]
 
 plt.figure(figsize=(90/25.4, 40/25.4))
-plt.plot(t, full_trace, color='C0', linewidth=1.5, label='Laser', alpha=0.8)
+plt.plot(t, full_trace, color='C0', linewidth=1.5, label='Illumination', alpha=0.8)
 
 # Plot fluorescence points above pulses
 mask = (full_trace < 8) & (full_trace > 0.6)
 plt.scatter(t[mask], fluor_trace[mask], color='C3', s=4, zorder=3, label='Fluorescence')
-plt.plot(t, fluor_trace, color='C3', zorder=3, alpha=0.5)
+# plt.plot(t, fluor_trace, color='C3', zorder=3, alpha=0.5)
 
 # for start, end, color in phases:
 #     plt.axvspan(start, end, ymin=0.92, ymax=1.0, facecolor=color,
@@ -66,7 +66,7 @@ plt.ylabel('Intensity')
 plt.xticks([])
 plt.yticks([])
 plt.xlim(0, t.max())
-# plt.ylim(-0.2, None)
+plt.ylim(-0.15, None)
 plt.legend(frameon=False, loc='upper right')
 sns.despine()
 plt.tight_layout()

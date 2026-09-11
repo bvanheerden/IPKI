@@ -374,23 +374,23 @@ if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
 
     fold_changes = np.log2(fold_changes)
 
-    fig, ax = plt.subplots(figsize=(70/25.4, 40/25.4))
+    fig, ax = plt.subplots(figsize=(90/25.4, 50/25.4))
     bars = ax.bar(k_labels, fold_changes, yerr=fold_change_errs, capsize=3, error_kw=dict(elinewidth=1),
                   color=['C0', 'C4', 'C1', 'C2'], alpha=0.8, edgecolor='black')
     
-    ax.set_ylabel(r'Fold-change $\log_2$(SOD / Control)')
+    ax.set_ylabel(r'$\log_2$(SOD / Control)')
 
     # Add text labels on top of bars
-    for i, bar in enumerate(bars):
-        height = bar.get_height()
-        err = fold_change_errs[i]
-        if height > 0:
-            y_pos = height + err + 0.05
-            ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='bottom')
-        else:
-            print(err)
-            y_pos = height - err - 0.07
-            ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='top')
+    # for i, bar in enumerate(bars):
+    #     height = bar.get_height()
+    #     err = fold_change_errs[i]
+    #     if height > 0:
+    #         y_pos = height + err + 0.05
+    #         ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='bottom')
+    #     else:
+    #         print(err)
+    #         y_pos = height - err - 0.07
+    #         ax.text(bar.get_x() + bar.get_width()/2., y_pos, f'{height:.2f}', ha='center', va='top')
 
     # ax.set_ylim([-1, 0.5])
     ax.tick_params(axis='x', top=True, labeltop=True, bottom=True, labelbottom=True)

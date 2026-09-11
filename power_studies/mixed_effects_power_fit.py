@@ -42,9 +42,9 @@ default_params = {
     'upper_bounds': None,
 }
 
-use_pickle = False  # Set to True to save/load processed traces
+use_pickle = True  # Set to True to save/load processed traces
 USE_2Q_MODEL = False  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = True  # Set to True to fit k2_light, False to fix it at 0
+FIT_K2_LIGHT = False  # Set to True to fit k2_light, False to fix it at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 # Loop through all power folders and collect results
