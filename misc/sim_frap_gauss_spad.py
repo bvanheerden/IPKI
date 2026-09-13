@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import h5py
+import utils
+
+utils.setup_plotting()
 
 
 # ============================================================
@@ -98,7 +101,7 @@ F_noisy = F + np.random.normal(
 # Plot
 # ============================================================
 
-plt.figure(figsize=(7, 5))
+plt.figure(figsize=(90/25.4, 50/25.4))
 
 
 if exp_t is not None and exp_y is not None:
@@ -107,7 +110,7 @@ if exp_t is not None and exp_y is not None:
         exp_y,
         '.',
         color='gray',
-        linewidth=1.5,
+        linewidth=1,
         alpha=0.6,
         label="Experimental data"
     )
@@ -115,7 +118,7 @@ if exp_t is not None and exp_y is not None:
 plt.plot(
     t,
     F,
-    linewidth=4,
+    linewidth=2.5,
     label="Analytical model"
 )
 
@@ -123,7 +126,7 @@ plt.xlabel("Time (s)")
 plt.ylabel("Norm. Fluorescence")
 
 plt.xlim(0, 26)
-plt.legend()
+plt.legend(frameon=False)
 # plt.grid(alpha=0.3)
 plt.tight_layout()
 

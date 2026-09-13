@@ -227,7 +227,7 @@ print("\n" + "=" * 80)
 print("Creating plot...")
 print("=" * 80)
 
-fig, ax = plt.subplots(figsize=(7, 4))
+fig, ax = plt.subplots(figsize=(100/25.4, 50/25.4))
 
 plot_datasets = ['LHCII Control', 'LHCII SOD']
 colors = {'LHCII Control': 'C0', 'LHCII SOD': 'C3'}
@@ -237,18 +237,39 @@ for display_name in plot_datasets:
         data = all_data[display_name]
         color = colors[display_name]
         # Plot experimental data
-        ax.plot(data['time'], data['data'], 'o-', color=color, label=f'{display_name} (data)',
-                markersize=3, linewidth=1.5, alpha=0.2)
+        ax.plot(data['time'], data['data'], 'o-', color=color,
+                markersize=1, linewidth=1.5, alpha=0.2)
         # Plot model fit
         if data['model'] is not None:
-            ax.plot(data['time'], data['model'], '-', color=color, label=f'{display_name} (fit)',
-                    linewidth=2.5, alpha=0.9)
+            ax.plot(data['time'], data['model'], '-', color=color, label=f'{display_name}',
+                    linewidth=2, alpha=0.9)
 
-ax.set_xlabel('Time (s)', fontsize=12)
-ax.set_ylabel('Normalized photon count', fontsize=12)
-ax.set_title('Control and SOD Comparison', fontsize=14, fontweight='bold')
-ax.legend(fontsize=10, loc='best')
-ax.grid(True, alpha=0.3)
+onlen = 2.5
+offlen = 30
+
+t_dark = onlen
+t_light = t_dark + offlen
+t_dark2 = t_light + onlen
+t_light2 = t_dark2 + offlen
+t_dark3 = t_light2 + onlen
+
+phases = [
+    (0, t_dark, 'white'),
+    (t_dark, t_light, 'black'),
+    (t_light, t_dark2, 'white'),
+    (t_dark2, t_light2, 'black'),
+    (t_light2, t_dark3, 'white'),
+    (t_dark3, t_dark3+offlen, 'black')
+]
+
+for start, end, color in phases:
+    ax.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=color,
+               edgecolor='black', linewidth=0.5, transform=ax.get_xaxis_transform())
+
+ax.set_xlabel('Time (s)')
+ax.set_ylabel('Fluorescence (norm.)')
+ax.set_xlim(0, 95)
+ax.legend(frameon=False, loc='upper right', bbox_to_anchor=(1.0, 0.96))
 plt.tight_layout()
 # plt.show()
 
@@ -417,6 +438,64 @@ if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
             tick.label2.set_visible(False)
         else:
             # Other labels above the axis
+            tick.label1.set_visible(False)
+            tick.label2.set_visible(True)
+
+    plt.tight_layout()
+    plt.show()
+
+    # Create second bar plot showing individual kr1 and kr2 instead of average kr (k2)
+    k_labels_2q = [r'$k_1$', r'$k_{2a}$', r'$k_{2b}$', r'$k_3$', r'$k_4$']
+
+    k_control_2q = [control_popt[0], control_popt[1], control_popt[2], control_popt[3], control_popt[4]]
+    k_sod_2q = [sod_popt[0], sod_popt[1], sod_popt[2], sod_popt[3], sod_popt[4]]
+
+    k_control_err_2q = [control_perr[0], control_perr[1], control_perr[2], control_perr[3], control_perr[4]]
+    k_sod_err_2q = [sod_perr[0], sod_perr[1], sod_perr[2], sod_perr[3], sod_perr[4]]
+
+    print('k_control (with kr1, kr2)', k_control_2q)
+    print('k_control_err (with kr1, kr2)', k_control_err_2q)
+    print('k_sod (with kr1, kr2)', k_sod_2q)
+    print('k_sod_err (with kr1, kr2)', k_sod_err_2q)
+
+    fold_changes_2q = [sod / ctrl if ctrl != 0 else np.nan for sod, ctrl in zip(k_sod_2q, k_control_2q)]
+
+    fold_change_errs_2q = []
+    for sod, ctrl, sod_err, ctrl_err in zip(k_sod_2q, k_control_2q, k_sod_err_2q, k_control_err_2q):
+        if ctrl != 0 and sod != 0:
+            rel_err_sq = (sod_err / sod)**2 + (ctrl_err / ctrl)**2
+            err = (1 / np.log(2)) * np.sqrt(rel_err_sq)
+            fold_change_errs_2q.append(err)
+        else:
+            fold_change_errs_2q.append(np.nan)
+
+    fold_changes_2q = np.log2(fold_changes_2q)
+
+    fig2, ax2 = plt.subplots(figsize=(90/25.4, 50/25.4))
+    bars2 = ax2.bar(k_labels_2q, fold_changes_2q, yerr=fold_change_errs_2q, capsize=3,
+                    error_kw=dict(elinewidth=1),
+                    color=['C0', 'C4', 'C5', 'C1', 'C2'], alpha=0.8, edgecolor='black')
+
+    ax2.set_ylabel(r'$\log_2$(SOD / Control)')
+
+    ax2.tick_params(axis='x', top=True, labeltop=True, bottom=True, labelbottom=True)
+    ax2.spines['top'].set_position(('data', 0))
+    ax2.spines['bottom'].set_position(('data', 0))
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_visible(True)
+
+    # Refresh the figure to ensure ticks are populated
+    fig2.canvas.draw()
+
+    # Get all tick objects
+    ticks2 = ax2.xaxis.get_major_ticks()
+    for i, tick in enumerate(ticks2):
+        if i < 3:
+            # First three labels below the axis (positive bars)
+            tick.label1.set_visible(True)
+            tick.label2.set_visible(False)
+        else:
+            # Other labels above the axis (negative bars)
             tick.label1.set_visible(False)
             tick.label2.set_visible(True)
 

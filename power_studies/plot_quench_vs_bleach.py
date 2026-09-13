@@ -118,22 +118,24 @@ def get_k2_average(df):
 
 def compute_quenching_amplitude(df):
     """
-    Compute quenching amplitude A = k1 / (k1 + k2) and propagated uncertainty.
+    Compute quenching amplitude A = k1 / (k1 + k3) and propagated uncertainty.
     """
-    k1 = get_numeric(df['K1 (s⁻¹)']).values
-    k1_err = get_error(df['K1 (s⁻¹)']).values
-    k2, k2_err = get_k2_average(df)
-    k2 = k2.values
-    k2_err = k2_err.values
+    k1_col = 'K1 (s⁻¹)' if 'K1 (s⁻¹)' in df.columns else 'k1 (s⁻¹)'
+    k1 = get_numeric(df[k1_col]).values
+    k1_err = get_error(df[k1_col]).values
 
-    denom = k1 + k2
+    k3_col = 'K3 (s⁻¹)' if 'K3 (s⁻¹)' in df.columns else 'k3 (s⁻¹)'
+    k3 = get_numeric(df[k3_col]).values
+    k3_err = get_error(df[k3_col]).values
+
+    denom = k1 + k3
     amplitude = np.where(denom != 0, k1 / denom, 0.0)
 
-    # Error propagation: dA/dk1 = k2 / (k1 + k2)^2, dA/dk2 = -k1 / (k1 + k2)^2
+    # Error propagation: dA/dk1 = k3 / (k1 + k3)^2, dA/dk3 = -k1 / (k1 + k3)^2
     denom_sq = denom**2
     amplitude_err = np.where(
         denom_sq != 0,
-        np.sqrt((k2 * k1_err)**2 + (k1 * k2_err)**2) / denom_sq,
+        np.sqrt((k3 * k1_err)**2 + (k1 * k3_err)**2) / denom_sq,
         0.0
     )
 
@@ -225,7 +227,7 @@ def load_datasets(results_dir=None):
 
 def plot_dataset_quenching_amplitude(df, dataset_name, ax=None, fit_slice=None, inset_max_power=None):
     """
-    Plot quenching amplitude k1/(k1+k2) as a function of power for a single dataset on given axis ax.
+    Plot quenching amplitude k1/(k1+k3) as a function of power for a single dataset on given axis ax.
 
     Parameters:
     - df: DataFrame containing power and rate columns
@@ -258,7 +260,7 @@ def plot_dataset_quenching_amplitude(df, dataset_name, ax=None, fit_slice=None, 
     # Plot data points with error bars on linear scale
     ax.errorbar(
         x, y, yerr=y_err, fmt=marker, color=color,
-        linewidth=1, markersize=4, capsize=3, label=r'Data $k_1/(k_1+k_2)$'
+        linewidth=1, markersize=4, capsize=3, label=r'Data $k_1/(k_1+k_3)$'
     )
 
     # Determine points to include in linear fit
@@ -279,8 +281,8 @@ def plot_dataset_quenching_amplitude(df, dataset_name, ax=None, fit_slice=None, 
     print(f"  Quenching Amplitude: slope = {m:.3e} ± {slope_err:.3e}, intercept = {b:.3e} ± {intercept_err:.3e} (fitted {len(x_for_fit)}/{len(x)} points)")
 
     # Plot linear fit line and confidence interval
-    ax.plot(x_fit, y_fit, color=color, linestyle='-', linewidth=1.5, label='Fit')
-    ax.fill_between(x_fit, y_low, y_high, color=color, alpha=0.2)
+    # ax.plot(x_fit, y_fit, color=color, linestyle='-', linewidth=1.5, label='Fit')
+    # ax.fill_between(x_fit, y_low, y_high, color=color, alpha=0.2)
 
     # Inset for low-power region (e.g. 72 mE down)
     if inset_max_power is not None:
@@ -332,9 +334,9 @@ def plot_dataset_quenching_amplitude(df, dataset_name, ax=None, fit_slice=None, 
     # Configure linear axes
     ax.set_title(dataset_name, fontsize=8)
     ax.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
-    # ax.set_ylabel(r'Quenching amplitude $k_1 / (k_1 + k_2)$')
+    # ax.set_ylabel(r'Quenching amplitude $k_1 / (k_1 + k_3)$')
     ax.set_xlim(0, x_max * 1.05)
-    ax.set_ylim(bottom=0)
+    # ax.set_ylim(bottom=0)
     ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=5))
     ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=5))
 
@@ -359,7 +361,7 @@ def main():
     inset_cutoffs = {
         'LHCII': None,
         'Thylakoids -AA': None,
-        'Thylakoids +AA': 72.0,
+        'Thylakoids +AA': None,
     }
 
     fig, axes = plt.subplots(1, 3, figsize=(180 / 25.4, 65 / 25.4), sharey=False)
@@ -373,11 +375,11 @@ def main():
             inset_max_power=inset_cutoffs.get(dataset_name)
         )
 
-    axes[0].set_ylabel(r'Reversible dark-state fraction $k_1 / (k_1 + k_2)$')
+    axes[0].set_ylabel(r'Branching ratio $k_1 / (k_1 + k_3)$')
     plt.tight_layout()
-    save_path = os.path.join(base_data_dir, 'quenching_amplitude_vs_power.png')
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"Saved combined plot to: {save_path}")
+    # save_path = os.path.join(base_data_dir, 'quenching_amplitude_vs_power.png')
+    # plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    # print(f"Saved combined plot to: {save_path}")
     plt.show()
 
 

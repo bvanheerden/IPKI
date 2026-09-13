@@ -82,7 +82,7 @@ sod_diff = sod_four - sod_zero
 
 fig, axes = plt.subplots(2, 2, figsize=utils.get_figure_size(140, 110),
                          sharex=True)
-ax_diff, ax_lhcii, ax_dhe, ax_sod = axes.flatten()
+ax_lhcii, ax_dhe, ax_sod, ax_diff = axes.flatten()
 
 # Plot 1: Difference Spectra
 ax_diff.plot(wav, lhcii_diff, label='DHE', lw=2)
@@ -104,21 +104,24 @@ diff_min = min(lhcii_diff[mask].min(), dhe_diff[mask].min(), sod_diff[mask].min(
 diff_max = max(lhcii_diff[mask].max(), dhe_diff[mask].max(), sod_diff[mask].max())
 padding = (diff_max - diff_min) * 0.05
 ax_diff_ins.set_ylim(diff_min - padding, diff_max + padding)
-ax_diff_ins.tick_params(labelsize=8)
+# ax_diff_ins.tick_params(labelsize=8)
 # mark_inset(ax_diff, ax_diff_ins, loc1=2, loc2=4, fc="none", ec="black")
+ax_diff.set_xlabel('Wavelength (nm)')
+ax_diff.text(0.05, 0.97, 'd', transform=ax_diff.transAxes, fontsize=8, fontweight='bold', va='top', ha='right')
 
 # Plot 2: DHE
 ax_lhcii.plot(wav, lhcii_zero, label='0 min', color='black')
 ax_lhcii.plot(wav, lhcii_four, label='4 min', color='red')
 # ax_lhcii.set_title('DHE')
-ax_lhcii.legend(frameon=False)
+ax_lhcii.legend(frameon=False, loc='lower right')
+ax_lhcii.text(0.05, 0.97, 'a', transform=ax_lhcii.transAxes, fontsize=8, fontweight='bold', va='top', ha='right')
 
 # Plot 3: DHE + LHCII
 ax_dhe.plot(wav, dhe_zero, label='0 min', color='black')
 ax_dhe.plot(wav, dhe_four, label='4 min', color='red')
 # ax_dhe.set_title('DHE+LHCII')
-ax_dhe.set_xlabel('Wavelength (nm)')
 ax_dhe.set_ylim((0, 40))
+ax_dhe.text(0.05, 0.97, 'b', transform=ax_dhe.transAxes, fontsize=8, fontweight='bold', va='top', ha='right')
 
 # Inset for Plot 3
 ax_dhe_ins = inset_axes(ax_dhe, width="40%", height="40%", loc='upper left', borderpad=3)
@@ -129,7 +132,7 @@ dhe_min = min(dhe_zero[mask].min(), dhe_four[mask].min())
 dhe_max = max(dhe_zero[mask].max(), dhe_four[mask].max())
 padding_dhe = (dhe_max - dhe_min) * 0.05
 ax_dhe_ins.set_ylim(dhe_min - padding_dhe, dhe_max + padding_dhe)
-ax_dhe_ins.tick_params(labelsize=8)
+# ax_dhe_ins.tick_params(labelsize=8)
 # mark_inset(ax_dhe, ax_dhe_ins, loc1=2, loc2=4, fc="none", ec="black")
 
 # Plot 4: DHE + LHCII + SOD
@@ -138,6 +141,7 @@ ax_sod.plot(wav, sod_four, label='4 min', color='red')
 # ax_sod.set_title('DHE+LHCII+SOD')
 ax_sod.set_xlabel('Wavelength (nm)')
 ax_sod.set_ylim((0, 40))
+ax_sod.text(0.05, 0.97, 'c', transform=ax_sod.transAxes, fontsize=8, fontweight='bold', va='top', ha='right')
 
 # Inset for Plot 4
 ax_sod_ins = inset_axes(ax_sod, width="40%", height="40%", loc='upper left', borderpad=3)
@@ -148,7 +152,7 @@ sod_min = min(sod_zero[mask].min(), sod_four[mask].min())
 sod_max = max(sod_zero[mask].max(), sod_four[mask].max())
 padding_sod = (sod_max - sod_min) * 0.05
 ax_sod_ins.set_ylim(sod_min - padding_sod, sod_max + padding_sod)
-ax_sod_ins.tick_params(labelsize=8)
+# ax_sod_ins.tick_params(labelsize=8)
 # mark_inset(ax_sod, ax_sod_ins, loc1=2, loc2=4, fc="none", ec="black")
 
 for ax in axes.flatten():
@@ -156,5 +160,5 @@ for ax in axes.flatten():
         ax.set_ylabel('Fluorescence (norm.)')
 
 plt.tight_layout()
-plt.savefig('DHE_spec.pdf')
-# plt.show()
+# plt.savefig('DHE_spec.pdf')
+plt.show()

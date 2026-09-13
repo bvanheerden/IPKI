@@ -16,10 +16,7 @@ plt.rcParams.update({"font.size": fontsize,
                      'xtick.labelsize': fontsize,
                      'legend.fontsize': fontsize,
                      })
-fig1, ax2 = plt.subplots(figsize=(85/25.4, 60/25.4))
-fig2 = plt.figure(figsize=(85/25.4, 60/25.4))
-# ax_thy_aa = brokenaxes(ylims=((0, 0.25), (0.7, 0.9)), fig=fig2, hspace=0.05, d=0)
-ax_thy_aa = fig2.add_subplot(111)
+fig, (ax2, ax_thy_aa) = plt.subplots(1, 2, figsize=(150/25.4, 60/25.4), sharey=True)
 
 def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
     # Parameters from Power_studies_June2026.py and typical thylakoid fits
@@ -38,7 +35,7 @@ def fit_thylakoid(has_aa=False, lhcii=False, lowlight=False):
     def thy_fitfunc(t):
         if lhcii:
             sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, 0.449, 6.08, 0.110,
-                                                                            0.05, 1.08, 0.86, 1, 0.2,
+                                                                            0.05, 1.08, 0.86, 1, 0.28,
                                                                             t_dark, t_light, t_dark2, t_light2, t_dark3)
             pops = []
             for i in range(5):
@@ -72,7 +69,7 @@ t_lhcii, pops_lhcii = fit_thylakoid(lhcii=True)
 # pops_lhcii = np.delete(pops_lhcii, 1, axis=0)
 
 for i in [4, 3, 2, 1, 0]:  # Order: U1, U2, Q, B
-    ax2.plot(t_lhcii, pops_lhcii[i], label=lhcii_pop_labels[i], color=lhcii_colors[i])
+    ax2.plot(t_lhcii, pops_lhcii[i], label=lhcii_pop_labels[i], color=lhcii_colors[i], lw=2)
     # ax2.text(4.2, 0.76, 'LHCII')
 
 print("Fitting Thylakoid AA...")
@@ -82,19 +79,20 @@ for i in [3, 2, 1, 0]: # Order: U1, U2, Q, B
     ax_thy_aa.plot(t_aa, pops_aa[i], label=thy_pop_labels[i], color=colors[i], lw=2)#3)
     # ax_thy_aa.text(3.0, 0.76, 'Thylakoids + AA')
 
-for ax_curr in [ax2, ax_thy_aa]:
-    ax_curr.set_ylabel('Population fraction')
-    ax_curr.set_ylim(0, 0.8)
+ax2.set_ylabel('Population fraction')
+ax2.set_ylim(0, 0.8)
 ax2.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.01, 1.02))
 ax_thy_aa.legend(loc='upper right', frameon=False, bbox_to_anchor=(1.0, 1.0))
+
+ax2.text(0.02, 0.98, 'a', transform=ax2.transAxes, fontweight='bold', va='top', fontsize=8)
+ax_thy_aa.text(0.02, 0.98, 'b', transform=ax_thy_aa.transAxes, fontweight='bold', va='top', fontsize=8)
 
 ax2.set_xlim(0, 5)
 # ax_thy_aa.set_xlim(0, 5)
 ax_thy_aa.set_xlim(0, 10)
 ax_thy_aa.set_xlabel('Time (s)')
 ax2.set_xlabel('Time (s)')
-fig1.tight_layout()
-fig2.tight_layout()
+fig.tight_layout()
 # ax_thy_aa.draw_diags(d=0.01)
 
 plt.show()

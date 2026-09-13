@@ -108,8 +108,20 @@ def fit_trace_2q(t, norm_pulsephotons, phase_indices, p0=None, fix_qfraction=Fal
     return model, residuals, popt
 
 def plot_comparison(t, norm_pulsephotons, model_std, res_std, model_fixed, res_fixed, phase_times, save_path=None):
-    fig, axes = plt.subplots(2, 2, figsize=(180 / 25.4, 75 / 25.4), sharex=True, gridspec_kw={'height_ratios': [3.2, 1], 'hspace': 0.08, 'wspace': 0.25})
+    t_dark, t_light, t_dark2, t_light2, t_dark3 = phase_times
+
+    fig, axes = plt.subplots(2, 2, figsize=(150 / 25.4, 75 / 25.4), sharex=True, sharey='row',
+                             gridspec_kw={'height_ratios': [3.2, 1], 'hspace': 0.08, 'wspace': 0.05})
     
+    phases = [
+        (0, t_dark, 'white'),
+        (t_dark, t_light, 'black'),
+        (t_light, t_dark2, 'white'),
+        (t_dark2, t_light2, 'black'),
+        (t_light2, t_dark3, 'white'),
+        (t_dark3, t[-1] if len(t) > 0 else 0, 'black')
+    ]
+
     models = [
         (model_std, res_std, 'With $U_2$', 'C3', axes[0, 0], axes[1, 0]),
         (model_fixed, res_fixed, 'Without $U_2$', 'C2', axes[0, 1], axes[1, 1])
@@ -118,10 +130,18 @@ def plot_comparison(t, norm_pulsephotons, model_std, res_std, model_fixed, res_f
     for model, res, title, color, ax_top, ax_bot in models:
         ax_top.plot(t, norm_pulsephotons, '.', color='gray', markersize=1, alpha=0.4)
         ax_top.plot(t, model, '-', color=color, lw=1)
+        for start, end, bar_color in phases:
+            ax_top.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=bar_color,
+                           edgecolor='black', linewidth=0.5, transform=ax_top.get_xaxis_transform())
         ax_top.set_title(title, fontsize=7.5, pad=3)
         ax_bot.plot(t, res, '.', color=color, markersize=1, alpha=0.4)
         ax_bot.axhline(0, color='black', linestyle='--', linewidth=0.7)
-    
+        ax_bot.set_xlabel('Time (s)')
+
+    axes[1, 0].set_ylabel('Residuals')
+    axes[0, 0].set_ylabel('Fluorescence (norm.)')
+    axes[0, 0].set_xlim(0, t[-1])
+    plt.tight_layout()
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
     return fig

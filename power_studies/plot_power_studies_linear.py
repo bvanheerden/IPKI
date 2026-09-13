@@ -118,7 +118,8 @@ def load_datasets(results_dir=None):
     }
 
 
-def plot_dataset_rates_linear(df, dataset_name, fit_slices=None, inset_max_power=None, save_path=None):
+def plot_dataset_rates_linear(df, dataset_name, fit_slices=None,
+                              inset_max_power=None, save_path=None, show_k2=False):
     """
     Plot a single dataset on a separate figure with 3 subplots (k1, k3, k4) on linear axes.
 
@@ -133,17 +134,25 @@ def plot_dataset_rates_linear(df, dataset_name, fit_slices=None, inset_max_power
         print(f"Skipping {dataset_name}: dataset is empty.")
         return None
 
-    fig, axes = plt.subplots(1, 3, figsize=(180 / 25.4, 58 / 25.4), sharex=True)
+    if show_k2:
+        fig, axes_ = plt.subplots(2, 2, figsize=(100 / 25.4, 80 / 25.4), sharex=True)
+        axes = axes_.flatten()
+        rate_specs = [
+            ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
+            ('K3 (s⁻¹)', r'$k_3$', 'C1', '^', 'k3', 2),
+            ('K4 (s⁻¹)', r'$k_4$', 'C2', 'v', 'k4', 3),
+        ]
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=(180 / 25.4, 58 / 25.4), sharex=True)
+        rate_specs = [
+            ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
+            ('K3 (s⁻¹)', r'$k_3$', 'C1', '^', 'k3', 1),
+            ('K4 (s⁻¹)', r'$k_4$', 'C2', 'v', 'k4', 2),
+        ]
 
     x = df['Power (mE)'].values.astype(float)
     x_max = np.max(x)
     x_fit = np.linspace(0, x_max * 1.05, 100)
-
-    rate_specs = [
-        ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
-        ('K3 (s⁻¹)', r'$k_3$', 'C1', '^', 'k3', 1),
-        ('K4 (s⁻¹)', r'$k_4$', 'C2', 'v', 'k4', 2),
-    ]
 
     print(f"\n==================== {dataset_name} (Linear Fits) ====================")
 
@@ -222,9 +231,10 @@ def plot_dataset_rates_linear(df, dataset_name, fit_slices=None, inset_max_power
                 indicator[1][2].set_visible(True)
                 indicator[1][3].set_visible(False)
 
-            ax.legend(frameon=False, loc='lower right', fontsize=6.5)
+            # ax.legend(frameon=False, loc='lower right', fontsize=6.5)
         else:
-            ax.legend(frameon=False, loc='best')
+            pass
+            # ax.legend(frameon=False, loc='best')
 
         # Configure linear axes
         # ax.set_title(rate_symbol, fontsize=8)
@@ -282,6 +292,10 @@ def main():
         'Thylakoids -AA': 'k_values_vs_power_no_AA_linear.png'
     }
 
+    show_k2 = {'LHCII': True,
+               'Thylakoids +AA': False,
+               'Thylakoids -AA': False}
+
     figs = []
     for dataset_name, df in datasets.items():
         save_path = os.path.join(base_data_dir, file_slugs.get(dataset_name, f"{dataset_name}_linear.png"))
@@ -290,8 +304,23 @@ def main():
             dataset_name=dataset_name,
             fit_slices=fit_subsets.get(dataset_name),
             inset_max_power=inset_cutoffs.get(dataset_name),
-            save_path=save_path
+            save_path=save_path,
+            show_k2=show_k2.get(dataset_name, False)
         )
+        if dataset_name == 'LHCII':
+            x = df['Power (mE)'].values.astype(float)
+            fig.axes[1].plot(x, [0.24 for val in x], 's', color='C3', markersize=3)
+            fig.axes[1].axhline(0.24, linestyle='--', color='C3', label='$k_{2}$')
+            fig.axes[1].plot(x, [0.08 for val in x], 's', color='C5', markersize=3)
+            fig.axes[1].axhline(0.08, linestyle='--', color='C5', label='$k_{2a}$')
+            fig.axes[1].plot(x, [2 for val in x], 's', color='C4', markersize=3)
+            fig.axes[1].axhline(2, linestyle='--', color='C4', label='$k_{2b}$')
+            fig.axes[1].set_ylim(0, 2.2)
+            fig.axes[1].legend(frameon=False)
+            fig.axes[1].set_ylabel(r'$k_2$ (s$^{-1}$)')
+            # fig.axes[1].set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
+            fig.axes[0].set_xlabel('')
+            plt.tight_layout()
         if fig is not None:
             figs.append(fig)
 
