@@ -10,6 +10,13 @@ from kinetic_models import kinetic_model
 import utils
 
 utils.setup_plotting()
+fontsize = 5
+plt.rcParams.update({"font.size": fontsize,
+                     'axes.titlesize': fontsize,
+                     'axes.labelsize': fontsize,
+                     'xtick.labelsize': fontsize,
+                     'legend.fontsize': fontsize,
+                     })
 
 
 # base_dir = r'/home/bertus/Documents/Postdoc/Metings/Suurstofprojek/2026/2 June 2026'
@@ -227,7 +234,7 @@ print("\n" + "=" * 80)
 print("Creating plot...")
 print("=" * 80)
 
-fig, ax = plt.subplots(figsize=(100/25.4, 50/25.4))
+fig, ax = plt.subplots(figsize=(60/25.4, 40/25.4))
 
 plot_datasets = ['LHCII Control', 'LHCII SOD']
 colors = {'LHCII Control': 'C0', 'LHCII SOD': 'C3'}
@@ -238,11 +245,11 @@ for display_name in plot_datasets:
         color = colors[display_name]
         # Plot experimental data
         ax.plot(data['time'], data['data'], 'o-', color=color,
-                markersize=1, linewidth=1.5, alpha=0.2)
+                markersize=1, linewidth=1, alpha=0.2)
         # Plot model fit
         if data['model'] is not None:
             ax.plot(data['time'], data['model'], '-', color=color, label=f'{display_name}',
-                    linewidth=2, alpha=0.9)
+                    linewidth=1, alpha=0.9)
 
 onlen = 2.5
 offlen = 30
@@ -271,7 +278,7 @@ ax.set_ylabel('Fluorescence (norm.)')
 ax.set_xlim(0, 95)
 ax.legend(frameon=False, loc='upper right', bbox_to_anchor=(1.0, 0.96))
 plt.tight_layout()
-# plt.show()
+plt.show()
 
 # Save plot
 plot_file = os.path.join(base_dir, 'control_sod_comparison.pdf')
@@ -471,7 +478,7 @@ if 'LHCII Control' in all_data and 'LHCII SOD' in all_data:
 
     fold_changes_2q = np.log2(fold_changes_2q)
 
-    fig2, ax2 = plt.subplots(figsize=(90/25.4, 50/25.4))
+    fig2, ax2 = plt.subplots(figsize=(50/25.4, 40/25.4))
     bars2 = ax2.bar(k_labels_2q, fold_changes_2q, yerr=fold_change_errs_2q, capsize=3,
                     error_kw=dict(elinewidth=1),
                     color=['C0', 'C4', 'C5', 'C1', 'C2'], alpha=0.8, edgecolor='black')

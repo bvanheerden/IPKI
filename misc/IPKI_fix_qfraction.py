@@ -111,7 +111,7 @@ def plot_comparison(t, norm_pulsephotons, model_std, res_std, model_fixed, res_f
     t_dark, t_light, t_dark2, t_light2, t_dark3 = phase_times
 
     fig, axes = plt.subplots(2, 2, figsize=(150 / 25.4, 75 / 25.4), sharex=True, sharey='row',
-                             gridspec_kw={'height_ratios': [3.2, 1], 'hspace': 0.08, 'wspace': 0.05})
+                             gridspec_kw={'height_ratios': [3.2, 1]})#, 'hspace': 0.08, 'wspace': 0.05})
     
     phases = [
         (0, t_dark, 'white'),
@@ -133,7 +133,7 @@ def plot_comparison(t, norm_pulsephotons, model_std, res_std, model_fixed, res_f
         for start, end, bar_color in phases:
             ax_top.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=bar_color,
                            edgecolor='black', linewidth=0.5, transform=ax_top.get_xaxis_transform())
-        ax_top.set_title(title, fontsize=7.5, pad=3)
+        ax_top.set_title(title, fontsize=7, pad=3)
         ax_bot.plot(t, res, '.', color=color, markersize=1, alpha=0.4)
         ax_bot.axhline(0, color='black', linestyle='--', linewidth=0.7)
         ax_bot.set_xlabel('Time (s)')

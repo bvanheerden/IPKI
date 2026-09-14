@@ -5,6 +5,13 @@ import h5py
 import utils
 
 utils.setup_plotting()
+fontsize = 5
+plt.rcParams.update({"font.size": fontsize,
+                     'axes.titlesize': fontsize,
+                     'axes.labelsize': fontsize,
+                     'xtick.labelsize': fontsize,
+                     'legend.fontsize': fontsize,
+                     })
 
 
 # ============================================================
@@ -101,7 +108,7 @@ F_noisy = F + np.random.normal(
 # Plot
 # ============================================================
 
-plt.figure(figsize=(90/25.4, 50/25.4))
+plt.figure(figsize=(50/25.4, 40/25.4))
 
 
 if exp_t is not None and exp_y is not None:
@@ -111,14 +118,15 @@ if exp_t is not None and exp_y is not None:
         '.',
         color='gray',
         linewidth=1,
-        alpha=0.6,
+        alpha=0.8,
+        markersize=0.7,
         label="Experimental data"
     )
 
 plt.plot(
     t,
     F,
-    linewidth=2.5,
+    linewidth=1,
     label="Analytical model"
 )
 

@@ -243,16 +243,16 @@ def fit_trace_1q(t, norm_pulsephotons, phase_indices, p0=None):
 
 
 def plot_comparison_residuals(t, norm_pulsephotons, model_1q, res_1q, model_2q, res_2q,
-                              phase_times, xlim=(0, 90), save_path=None):
+                              phase_times, xlim=(32, 65), save_path=None):
     """Plot side-by-side comparison of 1Q vs 2Q fits and their residuals."""
     t_dark, t_light, t_dark2, t_light2, t_dark3 = phase_times
 
     fig, axes = plt.subplots(
         2, 2,
-        figsize=(180 / 25.4, 75 / 25.4),
+        figsize=(150 / 25.4, 75 / 25.4),
         sharex=True,
         sharey='row',
-        gridspec_kw={'height_ratios': [3.2, 1], 'hspace': 0.08, 'wspace': 0.25}
+        gridspec_kw={'height_ratios': [3.2, 1]}#, 'hspace': 0.08, 'wspace': 0.05}
     )
 
     phases = [
@@ -278,8 +278,7 @@ def plot_comparison_residuals(t, norm_pulsephotons, model_1q, res_1q, model_2q, 
             ax_top.axvspan(start, end, ymin=0.96, ymax=1.0, facecolor=bar_color,
                            edgecolor='black', linewidth=0.5, transform=ax_top.get_xaxis_transform())
 
-        ax_top.set_title(title, fontsize=7.5, pad=3)
-        ax_top.set_ylabel('Normalized fluorescence')
+        ax_top.set_title(title, fontsize=7, pad=3)
         if xlim is not None:
             ax_top.set_xlim(xlim)
         # ax_top.legend(frameon=False, loc='lower left', fontsize=6.5)
@@ -288,15 +287,18 @@ def plot_comparison_residuals(t, norm_pulsephotons, model_1q, res_1q, model_2q, 
         ax_bot.plot(t, res, '.', color=color, markersize=1, alpha=0.4)
         ax_bot.axhline(0, color='black', linestyle='--', linewidth=0.7, alpha=0.7)
         ax_bot.set_xlabel('Time (s)')
-        ax_bot.set_ylabel('Residuals')
         if xlim is not None:
             ax_bot.set_xlim(xlim)
         res_max = np.nanmax(np.abs(res)) * 1.15
-        ax_bot.set_ylim(-res_max, res_max)
+        ax_bot.set_ylim(-0.025, 0.025)
+        ax_top.set_ylim(0.5, 0.77)
 
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Comparison plot saved to: {save_path}")
+
+    axes[1, 0].set_ylabel('Residuals')
+    axes[0, 0].set_ylabel('Fluorescence (norm.)')
 
     return fig
 
@@ -343,6 +345,7 @@ def main():
         save_path=out_cmp
     )
 
+    plt.tight_layout()
     plt.show()
 
 
