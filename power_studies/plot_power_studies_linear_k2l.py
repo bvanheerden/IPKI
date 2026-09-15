@@ -94,7 +94,7 @@ def load_datasets(results_dir=None):
         if 'Power (mE)' in df_with_aa.columns:
             df_with_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
     else:
-        path_no_aa = os.path.join(results_dir, 'data_no_aa_1q.pkl')
+        path_no_aa = os.path.join(results_dir, 'data_no_aa_2q_k2l.pkl')
         if os.path.exists(path_no_aa):
             with open(path_no_aa, 'rb') as f:
                 df_no_aa = pickle.load(f)
@@ -102,7 +102,7 @@ def load_datasets(results_dir=None):
         else:
             print("data_no_aa_1q.pkl not found in results/")
 
-        path_with_aa = os.path.join(results_dir, 'data_with_aa_1q.pkl')
+        path_with_aa = os.path.join(results_dir, 'data_with_aa_2q_k2l.pkl')
         if os.path.exists(path_with_aa):
             with open(path_with_aa, 'rb') as f:
                 df_with_aa = pickle.load(f)
@@ -110,7 +110,7 @@ def load_datasets(results_dir=None):
         else:
             print("data_with_aa_1q.pkl not found in results/")
 
-    path_lhcii = os.path.join(results_dir, 'data_no_aa_lhcii_2q.pkl')
+    path_lhcii = os.path.join(results_dir, 'data_no_aa_lhcii_1q_klight.pkl')
     if os.path.exists(path_lhcii):
         with open(path_lhcii, 'rb') as f:
             df_lhcii_no_aa = pickle.load(f)
@@ -153,15 +153,14 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
     if 'K2 (s⁻¹)' in df.columns:
         rate_specs = [
             ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
-            ('K2 (s⁻¹)', r'$k_2$', 'C3', 's', 'k2', 1),
+            ('K2_light (s⁻¹)', r'$k_2$', 'C3', 's', 'k2', 1),
             ('K3 (s⁻¹)', r'$k_3$', 'C1', '^', 'k3', 2),
             ('K4 (s⁻¹)', r'$k_4$', 'C2', 'v', 'k4', 3),
         ]
     else:
         rate_specs = [
             ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
-            ('Kr1 (s⁻¹)', r'$k_{2a}$', 'C4', 'o', 'k2a', 1),
-            ('Kr2 (s⁻¹)', r'$k_{2b}$', 'C5', 'o', 'k2b', 1),
+            ('Kr_l_avg (s⁻¹)', r'$k_{2a}$', 'C4', 'o', 'k2a', 1),
             ('K3 (s⁻¹)', r'$k_3$', 'C1', '^', 'k3', 2),
             ('K4 (s⁻¹)', r'$k_4$', 'C2', 'v', 'k4', 3),
         ]
@@ -207,7 +206,7 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
             ax.set_ylim(bottom=0)
         elif dataset_name == 'Thylakoids +AA':
             ax.errorbar(
-                x, y, yerr=0.068, fmt=marker, color=color,
+                x, y, yerr=y_err, fmt=marker, color=color,
                 linewidth=1, markersize=4, capsize=3, label=f'Data {rate_symbol}'
             )
             # ax.plot(x, [1 for val in x], 's', color='C3', markersize=3)
@@ -215,7 +214,7 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
             # ax.set_ylim(0, 2)
         elif dataset_name == 'Thylakoids -AA':
             ax.errorbar(
-                x, y, yerr=0.015, fmt=marker, color=color,
+                x, y, yerr=y_err, fmt=marker, color=color,
                 linewidth=1, markersize=4, capsize=3, label=f'Data {rate_symbol}'
             )
             # ax.plot(x, [0.53 for val in x], 's', color='C3', markersize=3)

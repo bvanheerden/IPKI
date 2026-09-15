@@ -85,7 +85,7 @@ if use_csv:
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        path = os.path.join(results_dir, 'data_no_aa_1q_k2l.pkl')
+        path = os.path.join(results_dir, 'data_no_aa_2q_k2l.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
             df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -118,7 +118,7 @@ base_data_dir = '.'
 if not df_with_aa.empty:
     fit_intercept = True  # Set to True to fit with an intercept
 
-    fig_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 60 / 25.4))
+    fig_aa, ax1 = plt.subplots(1, 1, figsize=(80 / 25.4, 50 / 25.4))
 
     x_aa = df_with_aa['Power (mE)'].values
     x_extrap = np.logspace(0, 3, 100)
@@ -175,7 +175,7 @@ if not df_with_aa.empty:
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
     # m1, b1, cov1 = linear_fit(x_aa[:5], k1_aa[:5])
-    m1, b1, cov1 = linear_fit(x_aa[1:-1], k1_aa[1:-1])  # k2 light
+    m1, b1, cov1 = linear_fit(x_aa[:], k1_aa[:])  # k2 light
     k1_fit = m1 * x_extrap + b1
     # k1_extrap = m1 * 2 + b1
     k1_extrap = k1_aa[0]
@@ -280,11 +280,11 @@ if not df_with_aa.empty:
     # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
     # log scale
     # ax1.text(1.9, 0.25, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', fontsize=6)
-    ax1.text(1.5, k1_extrap*1.7, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
-    ax1.text(1.4, k3_extrap*2.2, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
-    ax1.text(1.5, k4_extrap*0.4, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
-    ax1.text(1.7, 1.3, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False)#, bbox_to_anchor=(0.95, 0))
+    # ax1.text(1.5, k1_extrap*1.7, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
+    # ax1.text(1.4, k3_extrap*2.2, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
+    # ax1.text(1.5, k4_extrap*0.4, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
+    # ax1.text(1.7, 1.3, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncols=2)#, bbox_to_anchor=(0.95, 0))
     # ax1.axvline(2, color='gray', linestyle='--', linewidth=1)
 
     # sns.despine()
@@ -299,7 +299,7 @@ if not df_with_aa.empty:
 if not df_no_aa.empty:
     fit_intercept = True  # Set to True to fit with an intercept
 
-    fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 50 / 25.4))
+    fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(80 / 25.4, 50 / 25.4))
 
     x_no_aa = df_no_aa['Power (mE)'].values
     x_extrap = np.logspace(0, 3, 100)

@@ -45,10 +45,10 @@ default_params = {
 
 fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for that power
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
-use_pickle = False  # Set to True to save/load processed traces
+use_pickle = True  # Set to True to save/load processed traces
 USE_2Q_MODEL = True  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = False  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
-USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
+FIT_K2_LIGHT = True  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
+USE_JACKKNIFE = False  # Set to True to use leave-one-out jackknife for error estimation
 
 
 # Loop through all power folders and collect results
@@ -273,7 +273,7 @@ if all_datasets:
                     else:
                         p0_global.extend([dp0[0], dp0[1], dp0[2] if group_name != 'AA' else 0.0, 0.03, 0.0, dp0[3], dp0[4], 0.5, dp0[5], dp0[6]])
                     lower_bounds.extend([0, 0, 0, 0, 0, 0, 0, 0, 0.95, 0.0])
-                    upper_bounds.extend([5, 10, 15 if group_name != 'AA' else 1e-9, 10, 15 if group_name != 'AA' else 1e-9, 0.5, 15, 1.0, 1.05, 0.5])
+                    upper_bounds.extend([0.3, 10, 15 if group_name != 'AA' else 1e-9, 10, 15 if group_name != 'AA' else 1e-9, 0.5, 15, 1.0, 1.05, 0.5])
                 else:
                     # Expecting/Adapting to k1, kr1, kr2, k3, k4, f, q_sum, q_f
                     if len(dp0) >= 8:
@@ -289,7 +289,7 @@ if all_datasets:
                     # Per-dataset: k1, k2, k2_light, k3, k4, q_sum, q_f
                     p0_global.extend([dp0[0], dp0[1], dp0[2] if group_name != 'AA' else 0.0, dp0[3], dp0[4]])
                     lower_bounds.extend([0, 0, 0, 0, 0])
-                    upper_bounds.extend([5, 10, 15 if group_name != 'AA' else 1e-9, 0.5, 15])
+                    upper_bounds.extend([0.3, 10, 1.3 if group_name != 'AA' else 1e-9, 0.5, 15])
                 else:
                     # Per-dataset: k1, k2, k3, k4, q_sum, q_f
                     p0_global.extend([dp0[0], dp0[1], dp0[3], dp0[4]])

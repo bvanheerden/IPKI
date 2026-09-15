@@ -1,6 +1,12 @@
 import sys
 import os
 
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 # Add the project root to sys.path to allow imports of utils
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
@@ -33,9 +39,13 @@ def get_error(series):
     return pd.Series(0.0, index=series.index)
 
 def linear_fit(x, y, weights=None):
+    if len(x) > 1:
+        r, _ = stats.pearsonr(x, y)
+    else:
+        r = np.nan
     if FIT_WITH_INTERCEPT:
         p, cov = np.polyfit(x, y, 1, w=weights, cov=True)
-        return p[0], p[1] if p[1] > 0 else 0, cov
+        return p[0], p[1] if p[1] > 0 else 0, cov, r
     else:
         # Manual calculation for zero-intercept fit: y = m * x
         x_sq_sum = np.sum(x**2)
@@ -46,7 +56,7 @@ def linear_fit(x, y, weights=None):
         sigma2 = np.sum(resid**2) / (n - 1) if n > 1 else 0
         m_var = sigma2 / x_sq_sum
         cov = np.array([[m_var, 0], [0, 0]])
-        return m, 0.0, cov
+        return m, 0.0, cov, r
 
 def get_fit_bounds(x_range, m, b, cov):
     y_fit = m * x_range + b
@@ -85,7 +95,7 @@ if use_csv:
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        path = os.path.join(results_dir, 'data_no_aa_1q.pkl')
+        path = os.path.join(results_dir, 'data_no_aa_1q_k2l.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
             df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -136,7 +146,7 @@ if not df_with_aa.empty:
                 yerr=get_asymmetric_error(k3_aa, k3_err, k3_min), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3 = linear_fit(x_aa[:5], k3_aa[:5])
+    m3, b3, cov3, _ = linear_fit(x_aa[:5], k3_aa[:5])
     k3_fit = m3 * x_extrap + b3
     # k3_extrap = m3 * 2 + b3
     k3_extrap = k3_aa[0]
@@ -158,7 +168,7 @@ if not df_with_aa.empty:
                 yerr=get_asymmetric_error(k4_aa, k4_err, k4_min), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4 = linear_fit(x_aa[:7], k4_aa[:7])
+    m4, b4, cov4, _ = linear_fit(x_aa[:7], k4_aa[:7])
     k4_fit = m4 * x_extrap + b4
     # k4_extrap = m4 * 1 + b4
     k4_extrap = k4_aa[0]
@@ -174,14 +184,15 @@ if not df_with_aa.empty:
                  yerr=get_asymmetric_error(k1_aa, k1_err), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_aa[:5], k1_aa[:5])
+    m1, b1, cov1, r1 = linear_fit(x_aa[:5], k1_aa[:5])
     k1_fit = m1 * x_extrap + b1
     # k1_extrap = m1 * 2 + b1
-    k1_extrap = k1_aa[0]
-    print(k1_aa[:])
-    print(x_aa)
+    k1_extrap = k1_aa.iloc[0] if hasattr(k1_aa, 'iloc') else k1_aa[0]
+    print('k1_aa:', k1_aa.values)
+    print('x_aa:', x_aa)
     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
     print('m1', m1)
+    print(f"k1 (with AA) linear fit: m = {m1:.4e}, b = {b1:.4e}, r = {r1:.4f}, r^2 = {r1**2:.4f}")
     ax1.plot(x_extrap, k1_fit, 'C0-', label=None)
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
@@ -208,7 +219,7 @@ if not df_with_aa.empty:
                     yerr=get_asymmetric_error(k3_no_aa_overlay, k3_err_overlay), fmt='^',
                     linewidth=1, markersize=4, alpha=0.2, color='C1', capsize=3, label=None)
         # Linear fit for K3 (no AA) overlay
-        m3_no_aa, b3_no_aa, cov3_no_aa = linear_fit(x_no_aa_overlay[:], k3_no_aa_overlay[:])
+        m3_no_aa, b3_no_aa, cov3_no_aa, _ = linear_fit(x_no_aa_overlay[:], k3_no_aa_overlay[:])
         k3_fit_no_aa = m3_no_aa * x_extrap + b3
         y_low3_no_aa, y_high3_no_aa = get_fit_bounds(x_extrap, m3_no_aa, b3_no_aa, cov3_no_aa)
         ax1.plot(x_extrap, k3_fit_no_aa, 'C1--', alpha=0.2, label=None)
@@ -221,7 +232,7 @@ if not df_with_aa.empty:
                     yerr=get_asymmetric_error(k4_no_aa_overlay, k4_err_overlay), fmt='v',
                     linewidth=1, markersize=4, alpha=0.2, color='C2', capsize=3, label=None)
         # Linear fit for K4 (no AA) overlay
-        m4_no_aa, b4_no_aa, cov4_no_aa = linear_fit(x_no_aa_overlay[:], k4_no_aa_overlay[:])
+        m4_no_aa, b4_no_aa, cov4_no_aa, _ = linear_fit(x_no_aa_overlay[:], k4_no_aa_overlay[:])
         k4_fit_no_aa = m4_no_aa * x_extrap + b4
         y_low4_no_aa, y_high4_no_aa = get_fit_bounds(x_extrap, m4_no_aa, b4_no_aa, cov4_no_aa)
         ax1.plot(x_extrap, k4_fit_no_aa, 'C2--', alpha=0.2, label=None)
@@ -234,9 +245,10 @@ if not df_with_aa.empty:
                      yerr=get_asymmetric_error(k1_no_aa_overlay, k1_err_overlay), fmt='o',
                      linewidth=1, markersize=4, alpha=0.2, color='C0', capsize=3, label=None)
         # Linear fit for K1 (no AA) overlay
-        m1_no_aa, b1_no_aa, cov1_no_aa = linear_fit(x_no_aa_overlay[:5], k1_no_aa_overlay[:5])
+        m1_no_aa, b1_no_aa, cov1_no_aa, r1_no_aa_overlay = linear_fit(x_no_aa_overlay[:5], k1_no_aa_overlay[:5])
         k1_fit_no_aa = m1_no_aa * x_extrap + b1_no_aa
         y_low1_no_aa, y_high1_no_aa = get_fit_bounds(x_extrap, m1_no_aa, b1_no_aa, cov1_no_aa)
+        print(f"k1 (no AA overlay) linear fit: m = {m1_no_aa:.4e}, b = {b1_no_aa:.4e}, r = {r1_no_aa_overlay:.4f}, r^2 = {r1_no_aa_overlay**2:.4f}")
         ax1.plot(x_extrap, k1_fit_no_aa, 'C0--', alpha=0.2, label=None)
         # ax1.fill_between(x_extrap, y_low1_no_aa, y_high1_no_aa, color='C0', alpha=0.1)
 
@@ -308,7 +320,7 @@ if not df_no_aa.empty:
                 yerr=get_asymmetric_error(k3_no_aa, k3_err_no_aa), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3 = linear_fit(x_no_aa[:3], k3_no_aa[:3])
+    m3, b3, cov3, _ = linear_fit(x_no_aa[:3], k3_no_aa[:3])
     k3_fit = m3 * x_extrap + b3
     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
     ax1.plot(x_extrap, k3_fit, 'C1-', label=None)
@@ -321,7 +333,7 @@ if not df_no_aa.empty:
                 yerr=get_asymmetric_error(k4_no_aa, k4_err_no_aa), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4 = linear_fit(x_no_aa[:3], k4_no_aa[:3])
+    m4, b4, cov4, _ = linear_fit(x_no_aa[:3], k4_no_aa[:3])
     k4_fit = m4 * x_extrap + b4
     k4_extrap = m4
     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
@@ -335,10 +347,11 @@ if not df_no_aa.empty:
                  yerr=get_asymmetric_error(k1_no_aa, k1_err_no_aa), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1 = linear_fit(x_no_aa[:5], k1_no_aa[:5])
+    m1, b1, cov1, r1_no_aa = linear_fit(x_no_aa[:5], k1_no_aa[:5])
     k1_fit = m1 * x_extrap + b1
     k1_extrap = m1 * 2 + b1
     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
+    print(f"k1 (no AA) linear fit: m = {m1:.4e}, b = {b1:.4e}, r = {r1_no_aa:.4f}, r^2 = {r1_no_aa**2:.4f}")
     ax1.plot(x_extrap, k1_fit, 'C0-', label=None)
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
@@ -363,7 +376,7 @@ if not df_no_aa.empty:
         k3_err_lhcii = get_error(df_lhcii_no_aa['K3 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k3_lhcii, yerr=get_asymmetric_error(k3_lhcii, k3_err_lhcii),
                      fmt='^', linewidth=1, markersize=4, alpha=0.2, color='C1', capsize=3)
-        m3_lhcii, b3_lhcii, cov3_lhcii = linear_fit(x_lhcii[:-2], k3_lhcii)
+        m3_lhcii, b3_lhcii, cov3_lhcii, _ = linear_fit(x_lhcii[:-2], k3_lhcii)
         ax1.plot(x_extrap, m3_lhcii * x_extrap + b3_lhcii, 'C1--', alpha=0.2)
         
         # K4 LHCII
@@ -371,7 +384,7 @@ if not df_no_aa.empty:
         k4_err_lhcii = get_error(df_lhcii_no_aa['K4 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k4_lhcii, yerr=get_asymmetric_error(k4_lhcii, k4_err_lhcii),
                      fmt='v', linewidth=1, markersize=4, alpha=0.2, color='C2', capsize=3)
-        m4_lhcii, b4_lhcii, cov4_lhcii = linear_fit(x_lhcii[:-2], k4_lhcii)
+        m4_lhcii, b4_lhcii, cov4_lhcii, _ = linear_fit(x_lhcii[:-2], k4_lhcii)
         ax1.plot(x_extrap, m4_lhcii * x_extrap + b4_lhcii, 'C2--', alpha=0.2)
 
         # K1 LHCII
@@ -379,7 +392,8 @@ if not df_no_aa.empty:
         k1_err_lhcii = get_error(df_lhcii_no_aa['K1 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k1_lhcii, yerr=get_asymmetric_error(k1_lhcii, k1_err_lhcii),
                      fmt='o', linewidth=1, markersize=4, alpha=0.2, color='C0', capsize=3)
-        m1_lhcii, b1_lhcii, cov1_lhcii = linear_fit(x_lhcii[:-2], k1_lhcii)
+        m1_lhcii, b1_lhcii, cov1_lhcii, r1_lhcii = linear_fit(x_lhcii[:-2], k1_lhcii)
+        print(f"k1 (LHCII no AA) linear fit: m = {m1_lhcii:.4e}, b = {b1_lhcii:.4e}, r = {r1_lhcii:.4f}, r^2 = {r1_lhcii**2:.4f}")
         ax1.plot(x_extrap, m1_lhcii * x_extrap + b1_lhcii, 'C0--', alpha=0.2)
 
         # K2 LHCII
