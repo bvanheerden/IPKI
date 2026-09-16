@@ -288,14 +288,14 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
     if dataset_name == 'LHCII' or 'K2 (s⁻¹)' not in df.columns:
         ax_k2 = axes[1]
         # ax_k2.plot(x, [0.24 for val in x], 's', color='C3', markersize=3)
-        ax_k2.axhline(0.24, linestyle='--', color='C3', label=r'$k_{2}$')
+        # ax_k2.axhline(0.24, linestyle='--', color='C3', label=r'$k_{2}$')
         # ax_k2.plot(x, [0.08 for val in x], 's', color='C5', markersize=3)
         # ax_k2.axhline(0.08, linestyle='--', color='C5', label=r'$k_{2a}$')
         # ax_k2.plot(x, [2 for val in x], 's', color='C4', markersize=3)
         # ax_k2.axhline(2, linestyle='--', color='C4', label=r'$k_{2b}$')
         # ax_k2.set_xlim(0, x_max * 1.05)
         # # ax_k2.set_ylim(0, 2.2)
-        ax_k2.legend(frameon=False)
+        # ax_k2.legend(frameon=False)
         is_first_col = ax_k2.get_subplotspec().is_first_col() if hasattr(ax_k2, 'get_subplotspec') and ax_k2.get_subplotspec() is not None else False
         is_last_row = ax_k2.get_subplotspec().is_last_row() if hasattr(ax_k2, 'get_subplotspec') and ax_k2.get_subplotspec() is not None else True
         if is_first_col:

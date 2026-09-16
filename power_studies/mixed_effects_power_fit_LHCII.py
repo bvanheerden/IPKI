@@ -47,8 +47,8 @@ fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for th
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 use_pickle = True  # Set to True to save/load processed traces
 USE_2Q_MODEL = True  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = True  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
-USE_JACKKNIFE = False  # Set to True to use leave-one-out jackknife for error estimation
+FIT_K2_LIGHT = False  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
+USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 
 # Loop through all power folders and collect results
@@ -463,6 +463,10 @@ if all_datasets:
                         k1 = kr1 = kr2 = k3 = k4 = f_val = q_sum = q_f = np.nan
                         pk1 = pkr1 = pkr2 = pk3 = pk4 = pf = pqs = pqf = np.nan
                     tau_list = [1/k if k != 0 else np.nan for k in [k1, kr1, kr2, k3, k4]]
+                kr_avg = f_val * kr1 + (1.0 - f_val) * kr2
+                individual_kr_avgs = [p_ind[5] * p_ind[1] + (1.0 - p_ind[5]) * p_ind[2] for p_ind in
+                                      individual_popt_list]
+                pkr_avg = np.std(individual_kr_avgs) * np.sqrt(n_jk - 1) * 1.96
             else:
                 if FIT_K2_LIGHT:
                     if len(k_vals) >= 7:
@@ -512,6 +516,7 @@ if all_datasets:
                     res_dict.update({
                         'Kr1 (s⁻¹)': fmt(kr1, pkr1),
                         'Kr2 (s⁻¹)': fmt(kr2, pkr2),
+                        'K2 (s⁻¹)': fmt(kr_avg, pkr_avg),
                         'K3 (s⁻¹)': fmt(k3, pk3),
                         'K4 (s⁻¹)': fmt(k4, pk4),
                         'f': fmt(f_val, pf),
