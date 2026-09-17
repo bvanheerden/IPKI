@@ -43,8 +43,8 @@ default_params = {
 }
 
 use_pickle = False  # Set to True to save/load processed traces
-USE_2Q_MODEL = True  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = True  # Set to True to fit k2_light, False to fix it at 0
+USE_2Q_MODEL = False  # Set to True to use the 5-state kinetic_2q model
+FIT_K2_LIGHT = False  # Set to True to fit k2_light, False to fix it at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 # Loop through all power folders and collect results
@@ -917,7 +917,7 @@ if all_datasets:
     path_no_aa = os.path.join(results_dir, f'data_no_aa{suffix}.pkl')
     with open(path_no_aa, 'wb') as f:
         pickle.dump(df_no_aa, f)
-    path_with_aa = os.path.join(results_dir, f'data_with_aa{suffix}.pkl')
+    path_with_aa = os.path.join(results_dir, f'data_with_aa{suffix}_midk2.pkl')
     with open(path_with_aa, 'wb') as f:
         pickle.dump(df_with_aa, f)
     

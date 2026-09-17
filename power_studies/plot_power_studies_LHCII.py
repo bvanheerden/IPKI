@@ -219,7 +219,7 @@ df_with_aa = pd.DataFrame()
 df_thylakoid_no_aa = pd.DataFrame()
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii.pkl')
     with open(path, 'rb') as f:
         df_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -433,7 +433,8 @@ base_data_dir = '.'
 
 # Create unified figure for "without AA" data
 if not df_no_aa.empty:
-    fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(80 / 25.4, 50 / 25.4))
+    fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 60 / 25.4))  # main text 1c
+    # fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(80 / 25.4, 50 / 25.4))  # SI light-dependent k2
     fits_dict_no_aa = {}
 
     x_no_aa = df_no_aa['Power (mE)'].values
@@ -446,7 +447,7 @@ if not df_no_aa.empty:
                 yerr=get_error(df_no_aa['K3 (s⁻¹)'][:-1]), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=3, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3, r3, rss3, bic3, n3 = linear_fit(x_no_aa[:], k3_no_aa[:])
+    m3, b3, cov3, r3, rss3, bic3, n3 = linear_fit(x_no_aa[:-2], k3_no_aa[:-2])
     fits_dict_no_aa['k3'] = {'N': n3, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m3, 'b': b3, 'r': r3, 'rss': rss3, 'bic': bic3}
     k3_extrap = m3 * 2 + b3
     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
@@ -459,7 +460,7 @@ if not df_no_aa.empty:
                 yerr=get_error(df_no_aa['K4 (s⁻¹)'][:-1]), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=3, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4, r4, rss4, bic4, n4 = linear_fit(x_no_aa[:], k4_no_aa[:])
+    m4, b4, cov4, r4, rss4, bic4, n4 = linear_fit(x_no_aa[:-2], k4_no_aa[:-2])
     fits_dict_no_aa['k4'] = {'N': n4, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m4, 'b': b4, 'r': r4, 'rss': rss4, 'bic': bic4}
     k4_extrap = m4 * 2 + b4
     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
@@ -591,7 +592,7 @@ if not df_no_aa.empty:
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
     ])
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=1, bbox_to_anchor=(0.95, 0))
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=1, bbox_to_anchor=(1, -0.02))
 
     print_bic_summary(fits_dict_no_aa, title="No AA LHCII Linear Fits & Total BIC Summary")
 
