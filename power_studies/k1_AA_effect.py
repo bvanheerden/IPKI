@@ -112,9 +112,9 @@ def load_datasets(results_dir=None):
         print("data_no_aa_lhcii.pkl not found in results/")
 
     return {
+        'mid k2': df_lhcii_no_aa,
         'low k2': df_no_aa,
         'high k2': df_with_aa,
-        'mid k2': df_lhcii_no_aa,
     }
 
 
@@ -139,15 +139,15 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
 
     if dataset_name == 'high k2':
         rate_specs = [
-            ('K1 (s⁻¹)', r'$k_1$', 'C1', 'o', 'k1', 0),
+            ('K1 (s⁻¹)', r'$k_2 = 1.5$', 'C1', 'o', 'k1', 0),
         ]
     elif dataset_name == 'low k2':
         rate_specs = [
-            ('K1 (s⁻¹)', r'$k_1$', 'C2', 'o', 'k1', 0),
+            ('K1 (s⁻¹)', r'$k_2 = 0.7$', 'C2', 's', 'k1', 0),
         ]
     else:
         rate_specs = [
-            ('K1 (s⁻¹)', r'$k_1$', 'C0', 'o', 'k1', 0),
+            ('K1 (s⁻¹)', r'$k_2 = 1$', 'C0', '^', 'k1', 0),
         ]
 
 
@@ -184,7 +184,7 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
             # Plot data points with error bars on linear scale
             ax.errorbar(
                 x, y, yerr=y_err, fmt=marker, color=color,
-                linewidth=1, markersize=4, capsize=3, label=f'Data {rate_symbol}'
+                linewidth=1, markersize=4, capsize=3, label=rate_symbol
             )
             # Plot linear fit line and confidence interval
             # ax.plot(x_fit, y_fit, color=color, linestyle='-', linewidth=1.5, label=f'Fit {rate_symbol}')
@@ -196,10 +196,6 @@ def plot_dataset_rates_linear(df, dataset_name, axes=None, fit_slices=None,
         is_first_col = ax.get_subplotspec().is_first_col() if hasattr(ax, 'get_subplotspec') and ax.get_subplotspec() is not None else (idx == 0)
         is_last_row = ax.get_subplotspec().is_last_row() if hasattr(ax, 'get_subplotspec') and ax.get_subplotspec() is not None else True
 
-        if is_last_row:
-            ax.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
-        if is_first_col:
-            ax.set_ylabel(f'{rate_symbol} ' + r'(s$^{-1}$)')
         # ax.set_xlim(0, x_max * 1.05)
         ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=5))
         ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=5))
@@ -222,7 +218,7 @@ def main():
         }
     }
 
-    fig, ax = plt.subplots(1, 1, figsize=(60 / 25.4, 40 / 25.4))
+    fig, ax = plt.subplots(1, 1, figsize=(90 / 25.4, 55 / 25.4))
 
     for col_idx, (dataset_name, df) in enumerate(datasets.items()):
         print(dataset_name)
@@ -235,6 +231,9 @@ def main():
         )
     ax.set_xscale('log')
     ax.set_yscale('log')
+    ax.legend(frameon=False, loc='lower right')
+    ax.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
+    ax.set_ylabel(r'$k_1$ (s$^{-1}$)')
 
     plt.tight_layout()
     save_path = os.path.join(base_data_dir, 'k_values_vs_power_all_linear.pdf')

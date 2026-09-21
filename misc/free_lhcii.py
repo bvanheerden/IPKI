@@ -70,11 +70,11 @@ def fittrace(partnums):
 
 norm_pulsephotons, t = fittrace([1])
 
-plt.figure(figsize = (50/25.4, 40/25.4))
-plt.plot(t, norm_pulsephotons[:], '-', color='k', lw=1)
+plt.figure(figsize = (90/25.4, 55/25.4))
+plt.plot(t, norm_pulsephotons[:], '-', color='C0', lw=1)
 
 plt.xlabel('Time (s)')
-plt.ylabel('Normalized fluorescence')
+plt.ylabel('Fluorescence (norm.)')
 plt.tight_layout()
 plt.xlim(0, 25)
 plt.show()
