@@ -103,7 +103,7 @@ else:
         print("data_with_aa.pkl not found in results/")
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q_klight.pkl')
     with open(path, 'rb') as f:
         df_lhcii_no_aa = pickle.load(f)
 except FileNotFoundError:

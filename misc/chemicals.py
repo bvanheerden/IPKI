@@ -88,7 +88,7 @@ def fittrace(data_dir, partlist=None, onlen=None, offlen=None, p0=None, startind
 
 
     def fitfunc(t, k1, kr1, kr2, k3, k4, f, q_sum, q_fraction):
-        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, 0.3, 1, 0.23, t_dark,
+        sol1, sol2, sol3, sol4, sol5, sol6 = kinetic_model.modelfunc_2q(t, k1, kr1, kr2, k3, k4, 0.277, 1, 0.25, t_dark,
                                                        t_light, t_dark2, t_light2, t_dark3)
         return np.concatenate((sol1.y[3]+sol1.y[4], sol2.y[3][1:]+sol2.y[4][1:], sol3.y[3][1:]+sol3.y[4][1:],
                                sol4.y[3][1:]+sol4.y[4][1:], sol5.y[3][1:]+sol5.y[4][1:], sol6.y[3][1:]+sol6.y[4][1:]))

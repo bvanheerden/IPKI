@@ -47,7 +47,7 @@ fix_q_sum_at_power = None  # Set to a power value (e.g. 144) to fix q_sum for th
 fixed_q_sum_value = 1.0  # The value to fix q_sum to
 use_pickle = True  # Set to True to save/load processed traces
 USE_2Q_MODEL = True  # Set to True to use the 5-state kinetic_2q model
-FIT_K2_LIGHT = False  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
+FIT_K2_LIGHT = True  # Set to True to fit power-dependent k2_light (or kr1_light, kr2_light for 2Q), False to fix at 0
 USE_JACKKNIFE = True  # Set to True to use leave-one-out jackknife for error estimation
 
 
