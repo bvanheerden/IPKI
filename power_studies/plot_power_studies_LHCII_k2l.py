@@ -21,7 +21,7 @@ import seaborn as sns
 import scipy.stats as stats
 
 FIT_WITH_INTERCEPT = True
-FIT_K2_LINEAR = False  # Set to True to perform linear fit on k2 (if light-dependent), False for horizontal line / constant k2
+FIT_K2_LINEAR = True  # Set to True to perform linear fit on k2 (if light-dependent), False for horizontal line / constant k2
 PLOT_POWER_DEPENDENT_K2 = True  # Set to True to plot power-dependent average k2 data points, False for horizontal line
 
 import utils
@@ -44,6 +44,9 @@ def linear_fit(x, y, weights=None):
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
+    reg_res = stats.linregress(x, y)
+    print(reg_res.pvalue)
+    print('m = ', reg_res.slope)
     if n > 1:
         r, _ = stats.pearsonr(x, y)
     else:
@@ -509,17 +512,17 @@ if not df_no_aa.empty:
         ax1.axhline(k2_val, color='C3', linestyle='--', label=r'$k_2$')
 
     # Plot kr1 (k2a) and kr2 (k2b) if present
-    if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
-        kr1_val = get_numeric(df_no_aa['Kr1 (s⁻¹)']) + get_numeric(df_no_aa['Kr1_light (s⁻¹)'])
-        kr2_val = get_numeric(df_no_aa['Kr2 (s⁻¹)']) + get_numeric(df_no_aa['Kr2_light (s⁻¹)'])
-        kr1_plot = ax1.errorbar(x_no_aa[:-1], kr1_val[:-1],
-                     yerr=get_error(df_no_aa['Kr1_light (s⁻¹)'][:-1]), fmt='o', label=r'$k_{2a}$',
-                     linewidth=1, markersize=3, alpha=1, color='C4', capsize=3)
-        kr2_plot = ax1.errorbar(x_no_aa[:-1], kr2_val[:-1],
-                     yerr=get_error(df_no_aa['Kr2 (s⁻¹)'][:-1]), fmt='o', label=r'$k_{2b}$',
-                     linewidth=1, markersize=3, alpha=1, color='C5', capsize=3)
-        ax1.axhline(kr1_val.mean(), color='C4', linestyle='--')
-        ax1.axhline(kr2_val.mean(), color='C5', linestyle='--')
+    # if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
+    #     kr1_val = get_numeric(df_no_aa['Kr1 (s⁻¹)']) + get_numeric(df_no_aa['Kr1_light (s⁻¹)'])
+    #     kr2_val = get_numeric(df_no_aa['Kr2 (s⁻¹)']) + get_numeric(df_no_aa['Kr2_light (s⁻¹)'])
+    #     kr1_plot = ax1.errorbar(x_no_aa[:-1], kr1_val[:-1],
+    #                  yerr=get_error(df_no_aa['Kr1_light (s⁻¹)'][:-1]), fmt='o', label=r'$k_{2a}$',
+    #                  linewidth=1, markersize=3, alpha=1, color='C4', capsize=3)
+    #     kr2_plot = ax1.errorbar(x_no_aa[:-1], kr2_val[:-1],
+    #                  yerr=get_error(df_no_aa['Kr2 (s⁻¹)'][:-1]), fmt='o', label=r'$k_{2b}$',
+    #                  linewidth=1, markersize=3, alpha=1, color='C5', capsize=3)
+        # ax1.axhline(kr1_val.mean(), color='C4', linestyle='--')
+        # ax1.axhline(kr2_val.mean(), color='C5', linestyle='--')
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
     ax1.set_xlabel(r'Photon flux density (mmol m$^{-2}$ s$^{-1}$)')
@@ -584,16 +587,16 @@ if not df_no_aa.empty:
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='s' if (FIT_K2_LINEAR or PLOT_POWER_DEPENDENT_K2) else None, color='C3', label=r'$k_2$', linestyle='None' if (FIT_K2_LINEAR or PLOT_POWER_DEPENDENT_K2) else '--', markersize=4),
     ]
-    if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
-        legend_elements.extend([
-            Line2D([0], [0], marker='s', color='C4', label=r'$k_{2a}$', linestyle='None', markersize=4),
-            Line2D([0], [0], marker='s', color='C5', label=r'$k_{2b}$', linestyle='None', markersize=4),
-        ])
+    # if 'Kr1 (s⁻¹)' in df_no_aa.columns and 'Kr2 (s⁻¹)' in df_no_aa.columns:
+    #     legend_elements.extend([
+    #         Line2D([0], [0], marker='s', color='C4', label=r'$k_{2a}$', linestyle='None', markersize=4),
+    #         Line2D([0], [0], marker='s', color='C5', label=r'$k_{2b}$', linestyle='None', markersize=4),
+    #     ])
     legend_elements.extend([
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4),
     ])
-    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=2, bbox_to_anchor=(1, -0.02))
+    ax1.legend(handles=legend_elements, loc='lower right', frameon=False, ncol=1, bbox_to_anchor=(1, -0.02))
 
     print_bic_summary(fits_dict_no_aa, title="No AA LHCII Linear Fits & Total BIC Summary")
 

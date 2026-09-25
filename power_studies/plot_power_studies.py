@@ -39,24 +39,38 @@ def get_error(series):
     return pd.Series(0.0, index=series.index)
 
 def linear_fit(x, y, weights=None):
-    if len(x) > 1:
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    n = len(x)
+    reg_res = stats.linregress(x, y)
+    print('p = ', reg_res.pvalue)
+    print('r = ', reg_res.rvalue)
+    print('m = ', reg_res.slope)
+    if n > 1:
         r, _ = stats.pearsonr(x, y)
     else:
         r = np.nan
     if FIT_WITH_INTERCEPT:
         p, cov = np.polyfit(x, y, 1, w=weights, cov=True)
-        return p[0], p[1] if p[1] > 0 else 0, cov, r
+        m, b = p[0], p[1]
+        k_params = 2
     else:
         # Manual calculation for zero-intercept fit: y = m * x
         x_sq_sum = np.sum(x**2)
-        m = np.sum(x * y) / x_sq_sum
+        m = np.sum(x * y) / x_sq_sum if x_sq_sum != 0 else 0.0
+        b = 0.0
         # Residual variance estimate
         resid = y - m * x
         n = len(x)
         sigma2 = np.sum(resid**2) / (n - 1) if n > 1 else 0
-        m_var = sigma2 / x_sq_sum
+        m_var = sigma2 / x_sq_sum if x_sq_sum != 0 else 0
         cov = np.array([[m_var, 0], [0, 0]])
-        return m, 0.0, cov, r
+        k_params = 1
+
+    residuals = y - (m * x + b)
+    rss = np.sum(residuals**2)
+    bic = n * np.log(rss / n) + k_params * np.log(n) if (rss > 0 and n > 0) else np.nan
+    return m, b, cov, r, rss, bic, n
 
 def get_fit_bounds(x_range, m, b, cov):
     y_fit = m * x_range + b
@@ -65,6 +79,61 @@ def get_fit_bounds(x_range, m, b, cov):
     var_y = (x_range**2 * cov[0,0]) + (2 * x_range * cov[0,1]) + cov[1,1]
     sig_y = np.sqrt(np.maximum(var_y, 0))
     return np.clip(y_fit - sig_y, 1e-4, None), y_fit + sig_y
+
+def print_bic_summary(fits_dict, title="Linear Fits & BIC Summary"):
+    """
+    Prints a detailed table and total BIC for all linear fits in fits_dict.
+    fits_dict format: { 'Rate': {'N': n, 'k': k, 'm': m, 'b': b, 'r': r, 'rss': rss, 'bic': bic} }
+    """
+    if not fits_dict:
+        return
+
+    records = []
+    total_n = 0
+    total_k = 0
+    total_rss = 0.0
+    bic_sum = 0.0
+
+    for name, info in fits_dict.items():
+        n = info['N']
+        k = info['k']
+        m = info['m']
+        b = info['b']
+        r = info['r']
+        rss = info['rss']
+        bic = info['bic']
+
+        total_n += n
+        total_k += k
+        total_rss += rss
+        bic_sum += bic
+
+        records.append({
+            'Rate': name,
+            'N': n,
+            'k': k,
+            'Slope (m)': f"{m:.4e}",
+            'Intercept (b)': f"{b:.4e}",
+            'r': f"{r:.4f}" if np.isfinite(r) else "N/A",
+            'r²': f"{r**2:.4f}" if np.isfinite(r) else "N/A",
+            'RSS': f"{rss:.6e}",
+            'BIC': f"{bic:.2f}"
+        })
+
+    bic_joint = total_n * np.log(total_rss / total_n) + total_k * np.log(total_n) if (total_rss > 0 and total_n > 0) else np.nan
+
+    df_summary = pd.DataFrame(records)
+    print(f"\n{'='*70}")
+    print(f" {title}")
+    print(f"{'='*70}")
+    print(df_summary.to_string(index=False))
+    print(f"{'-'*70}")
+    print(f" Total Data Points (N):  {total_n}")
+    print(f" Total Parameters (K):   {total_k}")
+    print(f" Total RSS:              {total_rss:.6e}")
+    print(f" Joint / Combined BIC:   {bic_joint:.2f}  [N*ln(RSS/N) + K*ln(N)]")
+    print(f" Sum of Individual BICs: {bic_sum:.2f}  [Σ BIC_i]")
+    print(f"{'='*70}\n")
 
 def get_asymmetric_error(y, yerr, min_val=1e-3):
     """
@@ -95,7 +164,7 @@ if use_csv:
     df_with_aa = df_all[df_all['AA'] == 'Yes'].copy()
 else:
     try:
-        path = os.path.join(results_dir, 'data_no_aa_1q_k2l.pkl')
+        path = os.path.join(results_dir, 'data_no_aa_1q.pkl')
         with open(path, 'rb') as f:
             df_no_aa = pickle.load(f)
             df_no_aa.sort_values(by='Power (mE)', inplace=True, ignore_index=True)
@@ -113,7 +182,7 @@ else:
         print("data_with_aa.pkl not found in results/")
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q.pkl')
     with open(path, 'rb') as f:
         df_lhcii_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -127,6 +196,7 @@ base_data_dir = '.'
 # Create figure for "with AA" data: single axis for k1, k3, k4
 if not df_with_aa.empty:
     fit_intercept = True  # Set to True to fit with an intercept
+    fits_dict_aa = {}
 
     fig_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 60 / 25.4))
 
@@ -146,7 +216,8 @@ if not df_with_aa.empty:
                 yerr=get_asymmetric_error(k3_aa, k3_err, k3_min), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3, _ = linear_fit(x_aa[:5], k3_aa[:5])
+    m3, b3, cov3, r3, rss3, bic3, n3 = linear_fit(x_aa[:5], k3_aa[:5])
+    fits_dict_aa['k3'] = {'N': n3, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m3, 'b': b3, 'r': r3, 'rss': rss3, 'bic': bic3}
     k3_fit = m3 * x_extrap + b3
     # k3_extrap = m3 * 2 + b3
     k3_extrap = k3_aa[0]
@@ -168,7 +239,8 @@ if not df_with_aa.empty:
                 yerr=get_asymmetric_error(k4_aa, k4_err, k4_min), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4, _ = linear_fit(x_aa[:7], k4_aa[:7])
+    m4, b4, cov4, r4, rss4, bic4, n4 = linear_fit(x_aa[:7], k4_aa[:7])
+    fits_dict_aa['k4'] = {'N': n4, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m4, 'b': b4, 'r': r4, 'rss': rss4, 'bic': bic4}
     k4_fit = m4 * x_extrap + b4
     # k4_extrap = m4 * 1 + b4
     k4_extrap = k4_aa[0]
@@ -184,7 +256,8 @@ if not df_with_aa.empty:
                  yerr=get_asymmetric_error(k1_aa, k1_err), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1, r1 = linear_fit(x_aa[:5], k1_aa[:5])
+    m1, b1, cov1, r1, rss1, bic1, n1 = linear_fit(x_aa[:5], k1_aa[:5])
+    fits_dict_aa['k1'] = {'N': n1, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m1, 'b': b1, 'r': r1, 'rss': rss1, 'bic': bic1}
     k1_fit = m1 * x_extrap + b1
     # k1_extrap = m1 * 2 + b1
     k1_extrap = k1_aa.iloc[0] if hasattr(k1_aa, 'iloc') else k1_aa[0]
@@ -197,11 +270,12 @@ if not df_with_aa.empty:
     ax1.fill_between(x_extrap, y_low1, y_high1, color='C0', alpha=0.2)
 
     k2_aa_series = get_numeric(df_with_aa['K2 (s⁻¹)'])
-    k2_aa = k2_aa_series.iloc[0] if not k2_aa_series.empty else 0.0
+    k2_aa = k2_aa_series.mean() if not k2_aa_series.empty else 0.0
+    print('k2_aa:', k2_aa)
     k2_plot = ax1.axhline(k2_aa, color='C3', linestyle='--', label=r'$k_2$')
-    # ax1.errorbar(x_aa, k2l_aa + k2_aa,
-    #              yerr=get_error(df_with_aa['K2_light (s⁻¹)']), fmt='s',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3, label=None)
+    ax1.errorbar(x_aa, k2_aa_series,
+                 yerr=0.09, fmt='s',
+                 linewidth=1, markersize=4, alpha=1, color='C3', capsize=3, label=None)
     # m2l_no_aa = np.sum(x_aa[:] * k2l_aa[:]) / np.sum(x_aa[:] ** 2)
     # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_aa, 'C3--', alpha=1, label=None)
 
@@ -219,7 +293,7 @@ if not df_with_aa.empty:
                     yerr=get_asymmetric_error(k3_no_aa_overlay, k3_err_overlay), fmt='^',
                     linewidth=1, markersize=4, alpha=0.2, color='C1', capsize=3, label=None)
         # Linear fit for K3 (no AA) overlay
-        m3_no_aa, b3_no_aa, cov3_no_aa, _ = linear_fit(x_no_aa_overlay[:], k3_no_aa_overlay[:])
+        m3_no_aa, b3_no_aa, cov3_no_aa, *_ = linear_fit(x_no_aa_overlay[:], k3_no_aa_overlay[:])
         k3_fit_no_aa = m3_no_aa * x_extrap + b3
         y_low3_no_aa, y_high3_no_aa = get_fit_bounds(x_extrap, m3_no_aa, b3_no_aa, cov3_no_aa)
         ax1.plot(x_extrap, k3_fit_no_aa, 'C1--', alpha=0.2, label=None)
@@ -232,7 +306,7 @@ if not df_with_aa.empty:
                     yerr=get_asymmetric_error(k4_no_aa_overlay, k4_err_overlay), fmt='v',
                     linewidth=1, markersize=4, alpha=0.2, color='C2', capsize=3, label=None)
         # Linear fit for K4 (no AA) overlay
-        m4_no_aa, b4_no_aa, cov4_no_aa, _ = linear_fit(x_no_aa_overlay[:], k4_no_aa_overlay[:])
+        m4_no_aa, b4_no_aa, cov4_no_aa, *_ = linear_fit(x_no_aa_overlay[:], k4_no_aa_overlay[:])
         k4_fit_no_aa = m4_no_aa * x_extrap + b4
         y_low4_no_aa, y_high4_no_aa = get_fit_bounds(x_extrap, m4_no_aa, b4_no_aa, cov4_no_aa)
         ax1.plot(x_extrap, k4_fit_no_aa, 'C2--', alpha=0.2, label=None)
@@ -245,7 +319,7 @@ if not df_with_aa.empty:
                      yerr=get_asymmetric_error(k1_no_aa_overlay, k1_err_overlay), fmt='o',
                      linewidth=1, markersize=4, alpha=0.2, color='C0', capsize=3, label=None)
         # Linear fit for K1 (no AA) overlay
-        m1_no_aa, b1_no_aa, cov1_no_aa, r1_no_aa_overlay = linear_fit(x_no_aa_overlay[:5], k1_no_aa_overlay[:5])
+        m1_no_aa, b1_no_aa, cov1_no_aa, r1_no_aa_overlay, *_ = linear_fit(x_no_aa_overlay[:5], k1_no_aa_overlay[:5])
         k1_fit_no_aa = m1_no_aa * x_extrap + b1_no_aa
         y_low1_no_aa, y_high1_no_aa = get_fit_bounds(x_extrap, m1_no_aa, b1_no_aa, cov1_no_aa)
         print(f"k1 (no AA overlay) linear fit: m = {m1_no_aa:.4e}, b = {b1_no_aa:.4e}, r = {r1_no_aa_overlay:.4f}, r^2 = {r1_no_aa_overlay**2:.4f}")
@@ -254,12 +328,12 @@ if not df_with_aa.empty:
 
         # K2_light (no AA) overlay
         k2_no_aa_series = get_numeric(df_no_aa['K2 (s⁻¹)'])
-        k2_no_aa = k2_no_aa_series.iloc[0] if not k2_no_aa_series.empty else 0.0
+        k2_no_aa = k2_no_aa_series.mean() if not k2_no_aa_series.empty else 0.0
         ax1.axhline(k2_no_aa, color='C3', linestyle='--', label=r'$k_2$', alpha=0.3)
         # k2l_no_aa_overlay = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-        # ax1.errorbar(x_no_aa_overlay, k2l_no_aa_overlay + k2_no_aa,
-        #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s',
-        #              linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
+        ax1.errorbar(x_no_aa_overlay, k2_no_aa_series,
+                     yerr=0.02, fmt='s',
+                     linewidth=1, markersize=4, alpha=0.3, color='C3', capsize=3, label=None)
         # m2l_no_aa = np.sum(x_no_aa_overlay[:] * k2l_no_aa_overlay[:]) / np.sum(x_no_aa_overlay[:]**2)
         # ax1.plot(x_extrap, m2l_no_aa * x_extrap + k2_no_aa, 'C3--', alpha=0.3, label=None)
 
@@ -276,7 +350,7 @@ if not df_with_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='s', color='C3', label=r'$k_2$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4)
     ]
@@ -289,13 +363,14 @@ if not df_with_aa.empty:
     # ax1.legend(handles=legend_elements, loc='center left', frameon=False)
     # log scale
     # ax1.text(1.9, 0.25, r'Rates at 2 mmol photons m$^{-2}$ s$^{-1}$:', color='k', fontsize=6)
-    ax1.text(1.5, k1_extrap*1.7, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
-    ax1.text(1.4, k3_extrap*2.2, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
+    ax1.text(1.5, k1_extrap*2.1, rf'{k1_extrap:.2g} s$^{{-1}}$', color='C0', fontsize=6)
+    ax1.text(1.4, k3_extrap*2.3, rf'{k3_extrap:.2g} s$^{{-1}}$', color='C1', fontsize=6)
     ax1.text(1.5, k4_extrap*0.4, rf'{k4_extrap:.2g} s$^{{-1}}$', color='C2', fontsize=6)
-    ax1.text(1.7, 1.3, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
+    ax1.text(1.7, 1.4, rf'{k2_aa:.2g} s$^{{-1}}$', color='C3', fontsize=6)
     ax1.legend(handles=legend_elements, loc='lower right', frameon=False)#, bbox_to_anchor=(0.95, 0))
     # ax1.axvline(2, color='gray', linestyle='--', linewidth=1)
 
+    print_bic_summary(fits_dict_aa, title="With AA Linear Fits & Total BIC Summary")
     # sns.despine()
     # ax1.set_xlim(1, 1000)
     plt.tight_layout()
@@ -307,6 +382,7 @@ if not df_with_aa.empty:
 # Create unified figure for "without AA" data
 if not df_no_aa.empty:
     fit_intercept = True  # Set to True to fit with an intercept
+    fits_dict_no_aa = {}
 
     fig_no_aa, ax1 = plt.subplots(1, 1, figsize=(90 / 25.4, 50 / 25.4))
 
@@ -320,7 +396,8 @@ if not df_no_aa.empty:
                 yerr=get_asymmetric_error(k3_no_aa, k3_err_no_aa), fmt='^', label=r'$k_3$',
                 linewidth=1, markersize=4, alpha=1, color='C1', capsize=3)
     # Linear fit for K3
-    m3, b3, cov3, _ = linear_fit(x_no_aa[:3], k3_no_aa[:3])
+    m3, b3, cov3, r3, rss3, bic3, n3 = linear_fit(x_no_aa[:3], k3_no_aa[:3])
+    fits_dict_no_aa['k3'] = {'N': n3, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m3, 'b': b3, 'r': r3, 'rss': rss3, 'bic': bic3}
     k3_fit = m3 * x_extrap + b3
     y_low3, y_high3 = get_fit_bounds(x_extrap, m3, b3, cov3)
     ax1.plot(x_extrap, k3_fit, 'C1-', label=None)
@@ -333,7 +410,8 @@ if not df_no_aa.empty:
                 yerr=get_asymmetric_error(k4_no_aa, k4_err_no_aa), fmt='v', label=r'$k_4$',
                 linewidth=1, markersize=4, alpha=1, color='C2', capsize=3)
     # Linear fit for K4
-    m4, b4, cov4, _ = linear_fit(x_no_aa[:3], k4_no_aa[:3])
+    m4, b4, cov4, r4, rss4, bic4, n4 = linear_fit(x_no_aa[:3], k4_no_aa[:3])
+    fits_dict_no_aa['k4'] = {'N': n4, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m4, 'b': b4, 'r': r4, 'rss': rss4, 'bic': bic4}
     k4_fit = m4 * x_extrap + b4
     k4_extrap = m4
     y_low4, y_high4 = get_fit_bounds(x_extrap, m4, b4, cov4)
@@ -347,7 +425,8 @@ if not df_no_aa.empty:
                  yerr=get_asymmetric_error(k1_no_aa, k1_err_no_aa), fmt='o', label=r'$k_1$',
                  linewidth=1, markersize=4, alpha=1, color='C0', capsize=3)
     # Linear fit for K1
-    m1, b1, cov1, r1_no_aa = linear_fit(x_no_aa[:5], k1_no_aa[:5])
+    m1, b1, cov1, r1_no_aa, rss1, bic1, n1 = linear_fit(x_no_aa[:5], k1_no_aa[:5])
+    fits_dict_no_aa['k1'] = {'N': n1, 'k': 2 if FIT_WITH_INTERCEPT else 1, 'm': m1, 'b': b1, 'r': r1, 'rss': rss1, 'bic': bic1}
     k1_fit = m1 * x_extrap + b1
     k1_extrap = m1 * 2 + b1
     y_low1, y_high1 = get_fit_bounds(x_extrap, m1, b1, cov1)
@@ -357,12 +436,13 @@ if not df_no_aa.empty:
 
     # Plot K2_light (no AA)
     k2_no_aa_series = get_numeric(df_no_aa['K2 (s⁻¹)'])
-    k2_no_aa = k2_no_aa_series.iloc[0] if not k2_no_aa_series.empty else 0.0
+    k2_no_aa = k2_no_aa_series.mean() if not k2_no_aa_series.empty else 0.0
+    print(k2_no_aa)
     ax1.axhline(k2_no_aa, color='C3', linestyle='--', label=r'$k_2$')
     # k2l_no_aa = get_numeric(df_no_aa['K2_light (s⁻¹)'])
-    # k2_plot = ax1.errorbar(x_no_aa, k2l_no_aa + k2_no_aa,
-    #              yerr=get_error(df_no_aa['K2_light (s⁻¹)']), fmt='s', label=r'$k_{2}$',
-    #              linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
+    k2_plot = ax1.errorbar(x_no_aa, k2_no_aa_series,
+                 yerr=0.02, fmt='s', label=r'$k_{2}$',
+                 linewidth=1, markersize=4, alpha=1, color='C3', capsize=3)
     # # Linear fit for K2_light with zero intercept
     # m2l = np.sum(x_no_aa[:] * k2l_no_aa[:]) / np.sum(x_no_aa[:]**2)
     # ax1.plot(x_extrap, m2l * x_extrap + k2_no_aa, 'C3--', label=None)
@@ -376,7 +456,7 @@ if not df_no_aa.empty:
         k3_err_lhcii = get_error(df_lhcii_no_aa['K3 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k3_lhcii, yerr=get_asymmetric_error(k3_lhcii, k3_err_lhcii),
                      fmt='^', linewidth=1, markersize=4, alpha=0.2, color='C1', capsize=3)
-        m3_lhcii, b3_lhcii, cov3_lhcii, _ = linear_fit(x_lhcii[:-2], k3_lhcii)
+        m3_lhcii, b3_lhcii, cov3_lhcii, *_ = linear_fit(x_lhcii[:-2], k3_lhcii)
         ax1.plot(x_extrap, m3_lhcii * x_extrap + b3_lhcii, 'C1--', alpha=0.2)
         
         # K4 LHCII
@@ -384,7 +464,7 @@ if not df_no_aa.empty:
         k4_err_lhcii = get_error(df_lhcii_no_aa['K4 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k4_lhcii, yerr=get_asymmetric_error(k4_lhcii, k4_err_lhcii),
                      fmt='v', linewidth=1, markersize=4, alpha=0.2, color='C2', capsize=3)
-        m4_lhcii, b4_lhcii, cov4_lhcii, _ = linear_fit(x_lhcii[:-2], k4_lhcii)
+        m4_lhcii, b4_lhcii, cov4_lhcii, *_ = linear_fit(x_lhcii[:-2], k4_lhcii)
         ax1.plot(x_extrap, m4_lhcii * x_extrap + b4_lhcii, 'C2--', alpha=0.2)
 
         # K1 LHCII
@@ -392,7 +472,7 @@ if not df_no_aa.empty:
         k1_err_lhcii = get_error(df_lhcii_no_aa['K1 (s⁻¹)'])[:-2]
         ax1.errorbar(x_lhcii[:-2], k1_lhcii, yerr=get_asymmetric_error(k1_lhcii, k1_err_lhcii),
                      fmt='o', linewidth=1, markersize=4, alpha=0.2, color='C0', capsize=3)
-        m1_lhcii, b1_lhcii, cov1_lhcii, r1_lhcii = linear_fit(x_lhcii[:-2], k1_lhcii)
+        m1_lhcii, b1_lhcii, cov1_lhcii, r1_lhcii, *_ = linear_fit(x_lhcii[:-2], k1_lhcii)
         print(f"k1 (LHCII no AA) linear fit: m = {m1_lhcii:.4e}, b = {b1_lhcii:.4e}, r = {r1_lhcii:.4f}, r^2 = {r1_lhcii**2:.4f}")
         ax1.plot(x_extrap, m1_lhcii * x_extrap + b1_lhcii, 'C0--', alpha=0.2)
 
@@ -403,7 +483,11 @@ if not df_no_aa.empty:
         k2b_lhcii = k2b_lhcii_series.iloc[0] if not k2b_lhcii_series.empty else 0.0
         f_lhcii_series = get_numeric(df_lhcii_no_aa['f'])
         f_lhcii = f_lhcii_series.iloc[0] if not f_lhcii_series.empty else 0.0
-        k2_lhcii = 1 / (f_lhcii / k2a_lhcii + (1 - f_lhcii) / k2b_lhcii)
+        k2_lhcii_series = 1 / (f_lhcii_series / k2a_lhcii_series + (1 - f_lhcii_series) / k2b_lhcii_series)
+        k2_lhcii = k2_lhcii_series.mean() if not k2_lhcii_series.empty else 0.0
+        print(k2_lhcii)
+        ax1.errorbar(x_lhcii[:-2], k2_lhcii_series[:-2], yerr=0.08,
+                     fmt='s', linewidth=1, markersize=4, alpha=0.2, color='C3', capsize=3)
         ax1.axhline(k2_lhcii, color='C3', linestyle='--', alpha=0.2)
 
     ax1.set_ylabel(r'Kinetic rate (s$^{-1}$)')
@@ -419,11 +503,13 @@ if not df_no_aa.empty:
     from matplotlib.lines import Line2D
     legend_elements = [
         Line2D([0], [0], marker='o', color='C0', label=r'$k_1$', linestyle='None', markersize=4),
-        Line2D([0], [0], marker=None, color='C3', label=r'$k_2$', linestyle='--', markersize=4),
+        Line2D([0], [0], marker='s', color='C3', label=r'$k_2$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='^', color='C1', label=r'$k_3$', linestyle='None', markersize=4),
         Line2D([0], [0], marker='v', color='C2', label=r'$k_4$', linestyle='None', markersize=4)
     ]
     ax1.legend(handles=legend_elements, loc='best', frameon=False)
+
+    print_bic_summary(fits_dict_no_aa, title="No AA Linear Fits & Total BIC Summary")
 
     ax1.xaxis.set_major_formatter(mticker.ScalarFormatter())
     # sns.despine()

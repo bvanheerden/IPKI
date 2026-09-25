@@ -44,6 +44,8 @@ def linear_fit(x, y, weights=None):
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
+    reg_res = stats.linregress(x, y)
+    print(reg_res.pvalue)
     if n > 1:
         r, _ = stats.pearsonr(x, y)
     else:
@@ -219,7 +221,7 @@ df_with_aa = pd.DataFrame()
 df_thylakoid_no_aa = pd.DataFrame()
 
 try:
-    path = os.path.join(results_dir, 'data_no_aa_lhcii.pkl')
+    path = os.path.join(results_dir, 'data_no_aa_lhcii_2q.pkl')
     with open(path, 'rb') as f:
         df_no_aa = pickle.load(f)
 except FileNotFoundError:
@@ -500,7 +502,7 @@ if not df_no_aa.empty:
     elif PLOT_POWER_DEPENDENT_K2:
         k2_plot = ax1.errorbar(x_no_aa[:-1] if len(x_no_aa) > 2 else x_no_aa,
                                k2_no_aa[:-1] if len(k2_no_aa) > 2 else k2_no_aa,
-                               yerr=k2_no_aa_err[:-1] if len(k2_no_aa_err) > 2 else k2_no_aa_err,
+                               yerr=0.08,
                                fmt='s', label=r'$k_2$',
                                linewidth=1, markersize=3, alpha=1, color='C3', capsize=3)
         k2_val = k2_no_aa.mean() if not k2_no_aa.empty else 0.0
